@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { FromGranolaTrigger } from "./from-granola-trigger";
 
 const linkStyle = {
   display: "block",
@@ -69,6 +70,9 @@ export function ProjectSidebar({
       >
         Artifacts
       </Link>
+      <div style={{ marginTop: "var(--space-3)", paddingTop: "var(--space-2)", borderTop: "1px solid var(--color-border-subtle)" }}>
+        <FromGranolaTrigger projectId={projectId} variant="link" />
+      </div>
     </nav>
   );
 }

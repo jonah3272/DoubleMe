@@ -1,6 +1,10 @@
 /**
  * Minimal MCP client to call Granola MCP (https://mcp.granola.ai/mcp).
- * Used server-side only to list documents/transcripts and get content for importing tasks.
+ * Used server-side only to list documents/transcripts and get content for importing tasks/notes.
+ *
+ * Official mcp.granola.ai uses OAuth 2.0 (browser sign-in per user; no API key). We support
+ * an optional GRANOLA_API_TOKEN (e.g. a bearer token from another tool’s OAuth flow) for
+ * server-side requests.
  */
 
 import { getGranolaMcpUrlOptional, getGranolaApiTokenOptional } from "@/lib/env";
