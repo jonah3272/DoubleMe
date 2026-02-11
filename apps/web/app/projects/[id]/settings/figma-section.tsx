@@ -61,7 +61,7 @@ export function FigmaSection({ projectId, initialLinks }: { projectId: string; i
         <Button onClick={() => setAddOpen(true)}>Add Figma link</Button>
       </div>
       <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
-        Add Figma file or prototype URLs. They’ll appear on the dashboard. Optional name for each link.
+        Add Figma file or prototype URLs. They’ll appear on the project overview. Optional name for each link.
       </p>
       {links.length === 0 ? (
         <EmptyState

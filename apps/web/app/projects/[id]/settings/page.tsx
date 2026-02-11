@@ -1,9 +1,9 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isValidProjectId } from "@/lib/validators";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
+import { ProjectSidebar } from "../project-sidebar";
 import { ProjectTools } from "../project-tools";
 import { TeammatesSection } from "./teammates-section";
 import { CalendarSection } from "./calendar-section";
@@ -50,21 +50,12 @@ export default async function ProjectSettingsPage({
   }));
   const initialFigmaLinks = (figmaLinks ?? []).map((l) => ({ id: l.id, url: l.url, name: l.name }));
 
-  const nav = (
-    <nav style={{ padding: "var(--space-4)", fontSize: "var(--text-sm)" }}>
-      <Link href={`/projects/${id}`} style={{ display: "block", color: "var(--color-text-muted)", textDecoration: "none", marginBottom: "var(--space-4)" }}>
-        ← Dashboard
-      </Link>
-      <span style={{ fontWeight: "var(--font-semibold)", color: "var(--color-text)" }}>Settings</span>
-    </nav>
-  );
-
   return (
-    <AppShell sidebar={nav}>
+    <AppShell sidebar={<ProjectSidebar projectId={id} projectName={project.name} />}>
       <PageHeader title="Settings" description={`Tools and integrations for ${project.name}`} />
       <div style={{ padding: "var(--space-8)", maxWidth: "56rem", display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
         <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
-          Enable tools to connect them later (calendar, Figma, meeting notes). Output from connected tools and MCPs will show on the dashboard. Disabling hides a tool from the dashboard.
+          Enable tools to connect them later (calendar, Figma, meeting notes). Output from connected tools and MCPs will show on the project overview. Disabling hides a tool from the overview.
         </p>
         <div id="tools">
           <ProjectTools projectId={id} enabledAgentKeys={enabledAgentKeys} />

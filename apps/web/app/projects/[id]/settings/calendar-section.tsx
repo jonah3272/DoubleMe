@@ -74,7 +74,7 @@ export function CalendarSection({ projectId, initialEvents }: { projectId: strin
         <Button onClick={() => setAddOpen(true)}>Add event</Button>
       </div>
       <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
-        Add events manually. They'll show on the dashboard. Connect Google or Outlook later for automatic sync.
+        Add events manually. They'll show on the project overview. Connect Google or Outlook later for automatic sync.
       </p>
       {events.length === 0 ? (
         <EmptyState

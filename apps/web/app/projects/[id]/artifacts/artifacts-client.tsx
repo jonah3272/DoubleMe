@@ -133,7 +133,7 @@ export function ArtifactsClient({ projectId, initialArtifacts }: { projectId: st
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "var(--space-2)" }}>
         <Link href={`/projects/${projectId}`} style={{ fontSize: "var(--text-sm)", color: "var(--color-text-muted)", textDecoration: "none" }}>
-          ← Dashboard
+          ← Overview
         </Link>
         <Button onClick={() => setAddOpen(true)}>Add artifact</Button>
       </div>

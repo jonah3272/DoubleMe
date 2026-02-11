@@ -1,9 +1,9 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isValidProjectId } from "@/lib/validators";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
+import { ProjectSidebar } from "../project-sidebar";
 import { ThreadsListClient } from "./threads-list-client";
 
 export const dynamic = "force-dynamic";
@@ -36,16 +36,8 @@ export default async function ProjectThreadsPage({
     updated_at: c.updated_at,
   }));
 
-  const nav = (
-    <nav style={{ padding: "var(--space-4)", fontSize: "var(--text-sm)" }}>
-      <Link href={`/projects/${id}`} style={{ display: "block", color: "var(--color-text-muted)", textDecoration: "none" }}>
-        ← Dashboard
-      </Link>
-    </nav>
-  );
-
   return (
-    <AppShell sidebar={nav}>
+    <AppShell sidebar={<ProjectSidebar projectId={id} projectName={project.name} />}>
       <PageHeader title="Threads" description={`Conversations for ${project.name}`} />
       <div style={{ padding: "var(--space-8)", maxWidth: "56rem" }}>
         <ThreadsListClient projectId={id} initialConversations={initialConversations} />

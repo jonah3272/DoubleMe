@@ -1,10 +1,10 @@
 import { notFound } from "next/navigation";
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { isValidProjectId } from "@/lib/validators";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { ProjectDashboard } from "./project-dashboard";
+import { ProjectSidebar } from "./project-sidebar";
 
 export const dynamic = "force-dynamic";
 
@@ -75,77 +75,11 @@ export default async function ProjectWorkspacePage({
   const latestThread = latestConv ?? null;
   const latestArt = latestArtifact ?? null;
 
-  const projectsSidebar = (
-    <nav style={{ padding: "var(--space-4)", fontSize: "var(--text-sm)" }}>
-      <Link
-        href="/dashboard"
-        style={{
-          display: "block",
-          color: "var(--color-text-muted)",
-          textDecoration: "none",
-          marginBottom: "var(--space-2)",
-        }}
-      >
-        Home
-      </Link>
-      <Link
-        href="/projects"
-        style={{
-          display: "block",
-          color: "var(--color-text-muted)",
-          textDecoration: "none",
-          marginBottom: "var(--space-4)",
-        }}
-      >
-        Projects
-      </Link>
-      <span style={{ fontWeight: "var(--font-semibold)", color: "var(--color-text)" }}>
-        {project.name}
-      </span>
-      <Link
-        href={`/projects/${id}`}
-        style={{
-          display: "block",
-          marginTop: "var(--space-2)",
-          color: "var(--color-text-muted)",
-          textDecoration: "none",
-          fontSize: "var(--text-sm)",
-        }}
-      >
-        Dashboard
-      </Link>
-      <Link
-        href={`/projects/${id}/settings`}
-        style={{
-          display: "block",
-          marginTop: "var(--space-1)",
-          color: "var(--color-text-muted)",
-          textDecoration: "none",
-          fontSize: "var(--text-sm)",
-        }}
-      >
-        Settings
-      </Link>
-      <Link
-        href={`/projects/${id}/threads`}
-        style={{ display: "block", marginTop: "var(--space-2)", color: "var(--color-text-muted)", textDecoration: "none", fontSize: "var(--text-sm)" }}
-      >
-        Threads
-      </Link>
-      <Link
-        href={`/projects/${id}/artifacts`}
-        style={{ display: "block", marginTop: "var(--space-1)", color: "var(--color-text-muted)", textDecoration: "none", fontSize: "var(--text-sm)" }}
-      >
-        Artifacts
-      </Link>
-    </nav>
-  );
-
   return (
-    <AppShell sidebar={projectsSidebar}>
+    <AppShell sidebar={<ProjectSidebar projectId={id} projectName={project.name} />}>
       <PageHeader
         title={project.name}
-        description={project.description ?? "Your workspace. Connect calendar, Figma, and tools in Settings—their output will show here."}
+        description={project.description ?? "Overview of your workspace. Connect calendar, Figma, and tools in Settings—their output will show here."}
       />
       <div
         style={{
