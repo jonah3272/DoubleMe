@@ -33,3 +33,38 @@ export async function createProject(name: string, description: string | null): P
     updated_at: data.updated_at,
   };
 }
+
+export type EnableToolResult = { ok: true } | { ok: false; error: string };
+
+export async function enableProjectTool(projectId: string, agentKey: string): Promise<EnableToolResult> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("project_agents")
+    .insert({ project_id: projectId, agent_key: agentKey, config: {} });
+
+  if (error) {
+    if (error.code === "23505") return { ok: true }; // already enabled
+    return { ok: false, error: error.message };
+  }
+  revalidatePath("/projects");
+  revalidatePath(`/projects/${projectId}`);
+  return { ok: true };
+}
+
+export async function disableProjectTool(projectId: string, agentKey: string): Promise<EnableToolResult> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("project_agents")
+    .delete()
+    .eq("project_id", projectId)
+    .eq("agent_key", agentKey);
+
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/projects");
+  revalidatePath(`/projects/${projectId}`);
+  return { ok: true };
+}

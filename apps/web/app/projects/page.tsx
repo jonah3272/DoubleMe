@@ -24,5 +24,10 @@ export default async function ProjectsPage() {
 
   const projects: ProjectRow[] = error ? [] : (data ?? []);
 
+  // Single project: go straight to workspace (one big project, not agency)
+  if (projects.length === 1) {
+    redirect(`/projects/${projects[0].id}`);
+  }
+
   return <ProjectsPageClient initialProjects={projects} />;
 }

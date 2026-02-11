@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
-const DEV_EMAIL = "Jonahrehbeinjones@gmail.com";
-const DEV_PASSWORD = "passwordstacy3272";
+const DEV_EMAIL = "jonah3272@gmail.com";
+const DEV_PASSWORD = "Stacy3272";
 
 /**
  * One-time setup: ensure a dev user exists with the given password.

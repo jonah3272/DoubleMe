@@ -40,16 +40,7 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
--- Helper: true if current user owns the project
-CREATE OR REPLACE FUNCTION public.user_owns_project(project_id uuid)
-RETURNS boolean AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.projects p
-    WHERE p.id = project_id AND p.owner_id = auth.uid()
-  );
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
-
--- Projects: owned by a profile
+-- Projects: owned by a profile (must exist before user_owns_project)
 CREATE TABLE public.projects (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -68,6 +59,15 @@ CREATE POLICY "Users can CRUD own projects"
   ON public.projects FOR ALL
   USING (owner_id = auth.uid())
   WITH CHECK (owner_id = auth.uid());
+
+-- Helper: true if current user owns the project (after projects exists)
+CREATE OR REPLACE FUNCTION public.user_owns_project(project_id uuid)
+RETURNS boolean AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.projects p
+    WHERE p.id = project_id AND p.owner_id = auth.uid()
+  );
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
 
 -- Project agents: config per project (e.g. enabled tools)
 CREATE TABLE public.project_agents (
