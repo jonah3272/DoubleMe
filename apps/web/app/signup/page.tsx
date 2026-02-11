@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { confirmUserEmail } from "@/app/auth/actions";
+import { createUserNoEmail } from "@/app/auth/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
@@ -20,22 +20,14 @@ export default function SignUpPage() {
     e.preventDefault();
     setLoading(true);
     setMessage(null);
-    const supabase = createClient();
-    const { data, error } = await supabase.auth.signUp({ email, password });
-    if (error) {
+    const result = await createUserNoEmail(email.trim(), password);
+    if (!result.ok) {
       setLoading(false);
-      setMessage({ type: "error", text: error.message });
+      setMessage({ type: "error", text: result.error ?? "Signup failed." });
       return;
     }
-    if (data.user?.id) {
-      await confirmUserEmail(data.user.id);
-    }
-    if (data.session) {
-      router.push("/dashboard");
-      router.refresh();
-      return;
-    }
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    const supabase = createClient();
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     setLoading(false);
     if (!signInError) {
       router.push("/dashboard");
