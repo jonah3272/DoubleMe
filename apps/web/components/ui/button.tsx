@@ -1,12 +1,6 @@
 "use client";
 
 import { forwardRef } from "react";
-import { motion } from "framer-motion";
-
-const motionProps = {
-  whileTap: { opacity: 0.92 },
-  transition: { duration: 0.15 },
-};
 
 type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 type ButtonSize = "sm" | "md" | "lg";
@@ -72,11 +66,11 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     ref
   ) => {
     return (
-      <motion.button
+      <button
         ref={ref}
-        className={className}
-        disabled={disabled}
+        type="button"
         className={`ui-button ${className}`.trim()}
+        disabled={disabled}
         style={{
           ...baseStyle,
           ...variantStyles[variant],
@@ -84,11 +78,10 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           ...(fullWidth ? { width: "100%" } : {}),
           ...style,
         }}
-        {...motionProps}
         {...props}
       >
         {props.children}
-      </motion.button>
+      </button>
     );
   }
 );
