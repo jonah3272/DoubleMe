@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/supabase/server";
 import { createClient } from "@/lib/supabase/server";
+import { isValidProjectId } from "@/lib/validators";
 
 export type CreateProjectResult =
   | { ok: true; id: string; name: string; description: string | null; created_at: string; updated_at: string }
@@ -23,6 +24,7 @@ export async function createProject(name: string, description: string | null): P
   if (error) {
     return { ok: false, error: error.message };
   }
+  if (!data) return { ok: false, error: "Failed to create project." };
   revalidatePath("/projects");
   return {
     ok: true,
@@ -37,6 +39,7 @@ export async function createProject(name: string, description: string | null): P
 export type EnableToolResult = { ok: true } | { ok: false; error: string };
 
 export async function enableProjectTool(projectId: string, agentKey: string): Promise<EnableToolResult> {
+  if (!isValidProjectId(projectId)) return { ok: false, error: "Invalid project." };
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Not signed in." };
   const supabase = await createClient();
@@ -54,6 +57,7 @@ export async function enableProjectTool(projectId: string, agentKey: string): Pr
 }
 
 export async function disableProjectTool(projectId: string, agentKey: string): Promise<EnableToolResult> {
+  if (!isValidProjectId(projectId)) return { ok: false, error: "Invalid project." };
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Not signed in." };
   const supabase = await createClient();

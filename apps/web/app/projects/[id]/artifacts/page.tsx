@@ -4,11 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 import { isValidProjectId } from "@/lib/validators";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
-import { TasksClient } from "./tasks-client";
+import { ArtifactsClient } from "./artifacts-client";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProjectTasksPage({
+export default async function ProjectArtifactsPage({
   params,
 }: {
   params: Promise<{ id: string }>;
@@ -24,20 +24,18 @@ export default async function ProjectTasksPage({
 
   if (error || !project) notFound();
 
-  const [{ data: tasksData }, { data: contactsData }] = await Promise.all([
-    supabase.from("tasks").select("id, title, status, assignee_id, due_at, notes").eq("project_id", id).order("updated_at", { ascending: false }).limit(100),
-    supabase.from("contacts").select("id, name").eq("project_id", id).order("name").limit(100),
-  ]);
-  const contacts = (contactsData ?? []).map((c) => ({ id: c.id, name: c.name }));
-  const contactMap = Object.fromEntries(contacts.map((c) => [c.id, c.name]));
-  const initialTasks = (tasksData ?? []).map((t) => ({
-    id: t.id,
-    title: t.title,
-    status: t.status,
-    assignee_id: t.assignee_id,
-    assignee_name: t.assignee_id ? contactMap[t.assignee_id] ?? null : null,
-    due_at: t.due_at,
-    notes: t.notes,
+  const { data: artifacts } = await supabase
+    .from("artifacts")
+    .select("id, title, body, artifact_type, occurred_at")
+    .eq("project_id", id)
+    .order("updated_at", { ascending: false })
+    .limit(100);
+  const initialArtifacts = (artifacts ?? []).map((a) => ({
+    id: a.id,
+    title: a.title,
+    body: a.body,
+    artifact_type: a.artifact_type,
+    occurred_at: a.occurred_at,
   }));
 
   const nav = (
@@ -50,9 +48,9 @@ export default async function ProjectTasksPage({
 
   return (
     <AppShell sidebar={nav}>
-      <PageHeader title="Tasks" description={`Tasks for ${project.name}. Assign work to teammates from Settings.`} />
+      <PageHeader title="Artifacts" description={`Notes, meeting summaries, and plans for ${project.name}`} />
       <div style={{ padding: "var(--space-8)", maxWidth: "56rem" }}>
-        <TasksClient projectId={id} initialTasks={initialTasks} contacts={contacts} />
+        <ArtifactsClient projectId={id} initialArtifacts={initialArtifacts} />
       </div>
     </AppShell>
   );

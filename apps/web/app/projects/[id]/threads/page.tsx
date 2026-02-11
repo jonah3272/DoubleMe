@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { isValidProjectId } from "@/lib/validators";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
+import { ThreadsListClient } from "./threads-list-client";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +14,7 @@ export default async function ProjectThreadsPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  if (!isValidProjectId(id)) notFound();
   const supabase = await createClient();
   const { data: project, error } = await supabase
     .from("projects")
@@ -20,6 +23,18 @@ export default async function ProjectThreadsPage({
     .single();
 
   if (error || !project) notFound();
+
+  const { data: conversations } = await supabase
+    .from("conversations")
+    .select("id, title, updated_at")
+    .eq("project_id", id)
+    .order("updated_at", { ascending: false })
+    .limit(100);
+  const initialConversations = (conversations ?? []).map((c) => ({
+    id: c.id,
+    title: c.title,
+    updated_at: c.updated_at,
+  }));
 
   const nav = (
     <nav style={{ padding: "var(--space-4)", fontSize: "var(--text-sm)" }}>
@@ -32,11 +47,8 @@ export default async function ProjectThreadsPage({
   return (
     <AppShell sidebar={nav}>
       <PageHeader title="Threads" description={`Conversations for ${project.name}`} />
-      <div style={{ padding: "var(--space-8)", color: "var(--color-text-muted)", fontSize: "var(--text-sm)" }}>
-        <p style={{ margin: 0 }}>Threads and artifacts will appear here. Start a conversation from the dashboard or connect tools in Settings.</p>
-        <Link href={`/projects/${id}`} style={{ display: "inline-block", marginTop: "var(--space-4)", color: "var(--color-primary)", textDecoration: "none" }}>
-          Back to dashboard
-        </Link>
+      <div style={{ padding: "var(--space-8)", maxWidth: "56rem" }}>
+        <ThreadsListClient projectId={id} initialConversations={initialConversations} />
       </div>
     </AppShell>
   );

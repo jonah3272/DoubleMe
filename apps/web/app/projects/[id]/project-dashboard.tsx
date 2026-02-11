@@ -3,6 +3,12 @@ import { Card, CardContent } from "@/components/ui";
 
 const CHATGPT_URL = "https://chat.openai.com";
 
+type NextTask = { id: string; title: string; status: string };
+type LatestThread = { id: string; title: string | null; updated_at: string } | null;
+type LatestArtifact = { id: string; title: string; updated_at: string } | null;
+type UpcomingEvent = { id: string; title: string; start_at: string; end_at: string; link: string | null };
+type FigmaLink = { id: string; url: string; name: string };
+
 type DashboardProps = {
   projectId: string;
   projectName: string;
@@ -10,7 +16,23 @@ type DashboardProps = {
   contactsCount: number;
   conversationsCount: number;
   artifactsCount: number;
+  nextTasks: NextTask[];
+  latestThread: LatestThread;
+  latestArtifact: LatestArtifact;
+  upcomingEvents: UpcomingEvent[];
+  figmaLinks: FigmaLink[];
 };
+
+function formatEventTime(start: string) {
+  const d = new Date(start);
+  const today = new Date();
+  if (d.toDateString() === today.toDateString()) return `Today ${d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function figmaDisplayName(link: FigmaLink) {
+  return link.name || link.url.replace(/^https?:\/\//, "").slice(0, 32) + (link.url.length > 32 ? "…" : "");
+}
 
 export function ProjectDashboard({
   projectId,
@@ -19,6 +41,11 @@ export function ProjectDashboard({
   contactsCount,
   conversationsCount,
   artifactsCount,
+  nextTasks,
+  latestThread,
+  latestArtifact,
+  upcomingEvents,
+  figmaLinks,
 }: DashboardProps) {
   return (
     <div
@@ -42,12 +69,30 @@ export function ProjectDashboard({
               ? "No threads or artifacts yet."
               : `${conversationsCount} thread${conversationsCount !== 1 ? "s" : ""}, ${artifactsCount} artifact${artifactsCount !== 1 ? "s" : ""}.`}
           </p>
-          <Link
-            href={`/projects/${projectId}/threads`}
-            style={{ fontSize: "var(--text-sm)", marginTop: "var(--space-2)", display: "inline-block", color: "var(--color-primary)", textDecoration: "none" }}
-          >
-            View threads →
-          </Link>
+          {(latestThread || latestArtifact) && (
+            <p style={{ margin: "var(--space-2) 0 0 0", fontSize: "var(--text-xs)", color: "var(--color-text-subtle)" }}>
+              {latestThread && (
+                <>
+                  Latest thread: <Link href={`/projects/${projectId}/threads/${latestThread.id}`} style={{ color: "var(--color-primary)", textDecoration: "none" }}>{latestThread.title || "Thread"}</Link>
+                  {latestArtifact && " · "}
+                </>
+              )}
+              {latestArtifact && (
+                <>
+                  Latest artifact: <Link href={`/projects/${projectId}/artifacts`} style={{ color: "var(--color-primary)", textDecoration: "none" }}>{latestArtifact.title}</Link>
+                </>
+              )}
+            </p>
+          )}
+          <div style={{ marginTop: "var(--space-2)", display: "flex", flexWrap: "wrap", gap: "var(--space-2)" }}>
+            <Link href={`/projects/${projectId}/threads`} style={{ fontSize: "var(--text-sm)", color: "var(--color-primary)", textDecoration: "none" }}>
+              View threads →
+            </Link>
+            <span style={{ color: "var(--color-border)" }}>·</span>
+            <Link href={`/projects/${projectId}/artifacts`} style={{ fontSize: "var(--text-sm)", color: "var(--color-primary)", textDecoration: "none" }}>
+              View artifacts →
+            </Link>
+          </div>
         </CardContent>
       </Card>
 
@@ -63,6 +108,15 @@ export function ProjectDashboard({
           <p style={{ margin: 0, fontSize: "var(--text-sm)" }}>
             {tasksCount === 0 ? "No tasks yet." : `${tasksCount} task${tasksCount !== 1 ? "s" : ""}.`}
           </p>
+          {nextTasks.length > 0 && (
+            <ul style={{ margin: "var(--space-2) 0 0 0", paddingLeft: "var(--space-4)", fontSize: "var(--text-sm)" }}>
+              {nextTasks.map((t) => (
+                <li key={t.id}>
+                  <Link href={`/projects/${projectId}/tasks`} style={{ color: "var(--color-text)", textDecoration: "none" }}>{t.title}</Link>
+                </li>
+              ))}
+            </ul>
+          )}
           <Link
             href={`/projects/${projectId}/tasks`}
             style={{ fontSize: "var(--text-sm)", marginTop: "var(--space-2)", display: "inline-block", color: "var(--color-primary)", textDecoration: "none" }}
@@ -79,16 +133,31 @@ export function ProjectDashboard({
             Calendar
           </h3>
           <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)", marginBottom: "var(--space-3)" }}>
-            Upcoming events when you connect Google or Outlook.
+            Upcoming events. Add in Settings or connect Google/Outlook later.
           </p>
-          <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-subtle)" }}>
-            Connect in Settings.
-          </p>
+          {upcomingEvents.length === 0 ? (
+            <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-subtle)" }}>No upcoming events.</p>
+          ) : (
+            <ul style={{ margin: "0 0 var(--space-2) 0", paddingLeft: "var(--space-4)", fontSize: "var(--text-sm)" }}>
+              {upcomingEvents.map((ev) => (
+                <li key={ev.id}>
+                  {ev.link ? (
+                    <a href={ev.link} target="_blank" rel="noopener noreferrer" style={{ color: "var(--color-text)", textDecoration: "none" }}>
+                      {ev.title}
+                    </a>
+                  ) : (
+                    <span>{ev.title}</span>
+                  )}
+                  <span style={{ marginLeft: "var(--space-1)", color: "var(--color-text-muted)" }}>— {formatEventTime(ev.start_at)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
           <Link
-            href={`/projects/${projectId}/settings`}
+            href={`/projects/${projectId}/settings#calendar`}
             style={{ fontSize: "var(--text-sm)", marginTop: "var(--space-2)", display: "inline-block", color: "var(--color-primary)", textDecoration: "none" }}
           >
-            Settings →
+            {upcomingEvents.length === 0 ? "Add event in Settings →" : "Settings →"}
           </Link>
         </CardContent>
       </Card>
@@ -121,16 +190,26 @@ export function ProjectDashboard({
             Design
           </h3>
           <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)", marginBottom: "var(--space-3)" }}>
-            Recent Figma files and design links when connected.
+            Figma files and design links. Add in Settings.
           </p>
-          <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-subtle)" }}>
-            Connect Figma in Settings.
-          </p>
+          {figmaLinks.length === 0 ? (
+            <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-subtle)" }}>No Figma links yet.</p>
+          ) : (
+            <ul style={{ margin: "0 0 var(--space-2) 0", paddingLeft: "var(--space-4)", fontSize: "var(--text-sm)" }}>
+              {figmaLinks.map((link) => (
+                <li key={link.id}>
+                  <a href={link.url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--color-primary)", textDecoration: "none" }}>
+                    {figmaDisplayName(link)}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
           <Link
-            href={`/projects/${projectId}/settings`}
+            href={`/projects/${projectId}/settings#figma`}
             style={{ fontSize: "var(--text-sm)", marginTop: "var(--space-2)", display: "inline-block", color: "var(--color-primary)", textDecoration: "none" }}
           >
-            Settings →
+            {figmaLinks.length === 0 ? "Add Figma link in Settings →" : "Settings →"}
           </Link>
         </CardContent>
       </Card>
