@@ -3,8 +3,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
-import { ProjectTools } from "./project-tools";
-import { ChatEmbed } from "./chat-embed";
+import { ProjectDashboard } from "./project-dashboard";
 
 export const dynamic = "force-dynamic";
 
@@ -25,11 +24,16 @@ export default async function ProjectWorkspacePage({
     notFound();
   }
 
-  const { data: agents } = await supabase
-    .from("project_agents")
-    .select("agent_key")
-    .eq("project_id", id);
-  const enabledAgentKeys = (agents ?? []).map((a) => a.agent_key);
+  const [tasksRes, contactsRes, convRes, artRes] = await Promise.all([
+    supabase.from("tasks").select("id", { count: "exact", head: true }).eq("project_id", id),
+    supabase.from("contacts").select("id", { count: "exact", head: true }).eq("project_id", id),
+    supabase.from("conversations").select("id", { count: "exact", head: true }).eq("project_id", id),
+    supabase.from("artifacts").select("id", { count: "exact", head: true }).eq("project_id", id),
+  ]);
+  const tasksCount = tasksRes.count ?? 0;
+  const contactsCount = contactsRes.count ?? 0;
+  const conversationsCount = convRes.count ?? 0;
+  const artifactsCount = artRes.count ?? 0;
 
   const projectsSidebar = (
     <nav style={{ padding: "var(--space-4)", fontSize: "var(--text-sm)" }}>
@@ -42,7 +46,7 @@ export default async function ProjectWorkspacePage({
           marginBottom: "var(--space-2)",
         }}
       >
-        Dashboard
+        Home
       </Link>
       <Link
         href="/projects"
@@ -59,7 +63,7 @@ export default async function ProjectWorkspacePage({
         {project.name}
       </span>
       <Link
-        href={`/projects/${id}#chat`}
+        href={`/projects/${id}`}
         style={{
           display: "block",
           marginTop: "var(--space-2)",
@@ -68,7 +72,19 @@ export default async function ProjectWorkspacePage({
           fontSize: "var(--text-sm)",
         }}
       >
-        Chat
+        Dashboard
+      </Link>
+      <Link
+        href={`/projects/${id}/settings`}
+        style={{
+          display: "block",
+          marginTop: "var(--space-1)",
+          color: "var(--color-text-muted)",
+          textDecoration: "none",
+          fontSize: "var(--text-sm)",
+        }}
+      >
+        Settings
       </Link>
     </nav>
   );
@@ -77,7 +93,7 @@ export default async function ProjectWorkspacePage({
     <AppShell sidebar={projectsSidebar}>
       <PageHeader
         title={project.name}
-        description={project.description ?? undefined}
+        description={project.description ?? "Your workspace. Connect calendar, Figma, and tools in Settings—their output will show here."}
       />
       <div
         style={{
@@ -85,15 +101,17 @@ export default async function ProjectWorkspacePage({
           flex: 1,
           display: "flex",
           flexDirection: "column",
-          gap: "var(--space-8)",
-          maxWidth: "56rem",
+          gap: "var(--space-6)",
         }}
       >
-        <ProjectTools projectId={id} enabledAgentKeys={enabledAgentKeys} />
-        <ChatEmbed />
-        <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
-          Threads and artifacts will appear here once you start conversations. Enable &quot;Threads&quot; if you want to track that tool as enabled.
-        </p>
+        <ProjectDashboard
+          projectId={id}
+          projectName={project.name}
+          tasksCount={tasksCount}
+          contactsCount={contactsCount}
+          conversationsCount={conversationsCount}
+          artifactsCount={artifactsCount}
+        />
       </div>
     </AppShell>
   );
