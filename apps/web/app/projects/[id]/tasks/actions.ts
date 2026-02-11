@@ -61,6 +61,36 @@ export async function updateTask(
   return { ok: true };
 }
 
+export type BulkCreateResult = { ok: true; count: number } | { ok: false; error: string };
+
+export async function createTasksFromLines(
+  projectId: string,
+  lines: { title: string; due_at?: string | null }[]
+): Promise<BulkCreateResult> {
+  if (!isValidProjectId(projectId)) return { ok: false, error: "Invalid project." };
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+  const supabase = await createClient();
+  let count = 0;
+  for (const line of lines) {
+    const title = line.title.trim();
+    if (!title) continue;
+    const { error } = await supabase.from("tasks").insert({
+      project_id: projectId,
+      title,
+      status: "todo",
+      assignee_id: null,
+      due_at: line.due_at || null,
+      notes: null,
+    });
+    if (error) return { ok: false, error: error.message };
+    count++;
+  }
+  revalidatePath(`/projects/${projectId}`);
+  revalidatePath(`/projects/${projectId}/tasks`);
+  return { ok: true, count };
+}
+
 export async function deleteTask(projectId: string, taskId: string): Promise<VoidResult> {
   if (!isValidProjectId(projectId) || !isUuid(taskId)) return { ok: false, error: "Invalid project or task." };
   const user = await getCurrentUser();

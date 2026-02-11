@@ -7,7 +7,8 @@ export type ProjectToolId =
   | "meeting_notes"
   | "contacts"
   | "figma"
-  | "threads";
+  | "threads"
+  | "granola";
 
 export interface ProjectTool {
   id: ProjectToolId;
@@ -56,6 +57,13 @@ export const PROJECT_TOOLS: ProjectTool[] = [
     agentKey: "threads",
     name: "Threads",
     description: "Conversations and artifacts for this project (notes, plans, summaries).",
+    comingSoon: false,
+  },
+  {
+    id: "granola",
+    agentKey: "granola",
+    name: "Granola",
+    description: "Import meeting transcripts from Granola to create tasks and meeting notes in this project.",
     comingSoon: false,
   },
 ];

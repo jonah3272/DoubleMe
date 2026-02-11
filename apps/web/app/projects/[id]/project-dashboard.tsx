@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui";
+import { FromGranolaTrigger } from "./from-granola-trigger";
 
 const CHATGPT_URL = "https://chat.openai.com";
 
@@ -164,6 +165,9 @@ export function ProjectDashboard({
           >
             View tasks
           </Link>
+          <span style={{ display: "inline-flex", alignItems: "center" }}>
+            <FromGranolaTrigger projectId={projectId} />
+          </span>
         </div>
       </div>
 
@@ -425,6 +429,7 @@ export function ProjectDashboard({
               borderTop: "1px solid var(--color-border-subtle)",
             }}
           >
+            <FromGranolaTrigger projectId={projectId} variant="link" />
             <Link
               href={`/projects/${projectId}/settings#teammates`}
               style={{ fontSize: "var(--text-sm)", color: "var(--color-text-muted)", textDecoration: "none" }}

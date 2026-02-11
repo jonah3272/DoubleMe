@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -16,7 +16,8 @@ import {
   EmptyState,
   useToast,
 } from "@/components/ui";
-import { createTask, updateTask, deleteTask, type TaskStatus } from "./actions";
+import { createTask, updateTask, deleteTask, createTasksFromLines, type TaskStatus } from "./actions";
+import { listGranolaDocumentsAction, importTasksFromGranolaDocument, type GranolaDocument } from "./granola-actions";
 
 export type TaskRow = {
   id: string;
@@ -48,10 +49,19 @@ export function TasksClient({
 }) {
   const [tasks, setTasks] = useState<TaskRow[]>(initialTasks);
   const [addOpen, setAddOpen] = useState(false);
+  const [meetingOpen, setMeetingOpen] = useState(false);
+  const [meetingPaste, setMeetingPaste] = useState("");
+  const [meetingDue, setMeetingDue] = useState<"today" | "week">("week");
+  const [granolaOpen, setGranolaOpen] = useState(false);
+  const [granolaDocs, setGranolaDocs] = useState<GranolaDocument[]>([]);
+  const [granolaLoading, setGranolaLoading] = useState(false);
+  const [granolaSelectedId, setGranolaSelectedId] = useState("");
+  const [granolaDue, setGranolaDue] = useState<"today" | "week">("week");
   const [editOpen, setEditOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [editing, setEditing] = useState<TaskRow | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
   const [form, setForm] = useState({
     title: "",
     status: "todo" as TaskStatus,
@@ -61,6 +71,10 @@ export function TasksClient({
   });
   const { addToast } = useToast();
   const router = useRouter();
+
+  useEffect(() => {
+    setTasks(initialTasks);
+  }, [initialTasks]);
 
   const openEdit = (t: TaskRow) => {
     setEditing(t);
@@ -168,14 +182,162 @@ export function TasksClient({
     return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: d.getFullYear() !== new Date().getFullYear() ? "numeric" : undefined });
   };
 
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+  const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString();
+  const dayOfWeek = now.getDay();
+  const daysUntilFriday = dayOfWeek <= 5 ? 5 - dayOfWeek : 5 + (7 - dayOfWeek);
+  const endOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysUntilFriday, 23, 59, 59).toISOString();
+
+  const dailyTasks = tasks.filter(
+    (t) =>
+      (t.status === "todo" || t.status === "in_progress") &&
+      t.due_at &&
+      t.due_at >= startOfToday &&
+      t.due_at <= endOfWeek
+  );
+  const otherTasks = tasks.filter((t) => !dailyTasks.includes(t));
+
+  const handleToggleDone = async (t: TaskRow) => {
+    const nextStatus = t.status === "done" ? "todo" : "done";
+    setTogglingId(t.id);
+    const result = await updateTask(projectId, t.id, { status: nextStatus });
+    setTogglingId(null);
+    if (result.ok) {
+      setTasks((prev) => prev.map((task) => (task.id === t.id ? { ...task, status: nextStatus } : task)));
+      router.refresh();
+    } else {
+      addToast(result.error, "error");
+    }
+  };
+
+  const meetingLines = meetingPaste
+    .split(/\n/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const handleAddFromMeeting = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (meetingLines.length === 0) return;
+    setSubmitting(true);
+    const dueAt = meetingDue === "today" ? endOfToday : endOfWeek;
+    const result = await createTasksFromLines(
+      projectId,
+      meetingLines.map((title) => ({ title, due_at: dueAt }))
+    );
+    setSubmitting(false);
+    if (result.ok) {
+      setMeetingOpen(false);
+      setMeetingPaste("");
+      router.refresh();
+      addToast(`${result.count} task${result.count === 1 ? "" : "s"} added from meeting.`, "success");
+    } else {
+      addToast(result.error, "error");
+    }
+  };
+
+  const handleOpenGranola = async () => {
+    setGranolaOpen(true);
+    setGranolaDocs([]);
+    setGranolaSelectedId("");
+    setGranolaLoading(true);
+    const result = await listGranolaDocumentsAction();
+    setGranolaLoading(false);
+    if (result.ok) setGranolaDocs(result.documents);
+    else addToast(result.error, "error");
+  };
+
+  const handleImportFromGranola = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!granolaSelectedId) return;
+    setSubmitting(true);
+    const result = await importTasksFromGranolaDocument(projectId, granolaSelectedId, granolaDue);
+    setSubmitting(false);
+    if (result.ok) {
+      setGranolaOpen(false);
+      setGranolaSelectedId("");
+      router.refresh();
+      addToast(`${result.count} task${result.count === 1 ? "" : "s"} imported from Granola.`, "success");
+    } else {
+      addToast(result.error, "error");
+    }
+  };
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "var(--space-2)" }}>
         <Link href={`/projects/${projectId}`} style={{ fontSize: "var(--text-sm)", color: "var(--color-text-muted)", textDecoration: "none" }}>
           ← Overview
         </Link>
-        <Button onClick={() => setAddOpen(true)}>Add task</Button>
+        <div style={{ display: "flex", gap: "var(--space-2)" }}>
+          <Button variant="secondary" onClick={handleOpenGranola}>
+            Import from Granola
+          </Button>
+          <Button variant="secondary" onClick={() => setMeetingOpen(true)}>
+            Add from meeting
+          </Button>
+          <Button onClick={() => setAddOpen(true)}>Add task</Button>
+        </div>
       </div>
+
+      {/* Daily tasks – this week, cross off */}
+      <section>
+        <h2 style={{ margin: "0 0 var(--space-3) 0", fontSize: "var(--text-sm)", fontWeight: "var(--font-semibold)", color: "var(--color-text-muted)", letterSpacing: "0.02em", textTransform: "uppercase" }}>
+          This week
+        </h2>
+        {dailyTasks.length === 0 ? (
+          <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
+            No tasks due this week. Add tasks or paste from meeting notes above.
+          </p>
+        ) : (
+          <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+            {dailyTasks.map((t) => (
+              <li
+                key={t.id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "var(--space-3)",
+                  padding: "var(--space-2) 0",
+                  borderBottom: "1px solid var(--color-border-subtle)",
+                }}
+              >
+                <button
+                  type="button"
+                  aria-label={t.status === "done" ? "Mark not done" : "Mark done"}
+                  onClick={() => handleToggleDone(t)}
+                  disabled={togglingId === t.id}
+                  style={{
+                    width: 20,
+                    height: 20,
+                    flexShrink: 0,
+                    borderRadius: "var(--radius-sm)",
+                    border: "2px solid var(--color-border)",
+                    backgroundColor: t.status === "done" ? "var(--color-primary)" : "transparent",
+                    cursor: togglingId === t.id ? "wait" : "pointer",
+                  }}
+                />
+                <span
+                  style={{
+                    flex: 1,
+                    fontSize: "var(--text-base)",
+                    textDecoration: t.status === "done" ? "line-through" : "none",
+                    color: t.status === "done" ? "var(--color-text-muted)" : "var(--color-text)",
+                  }}
+                >
+                  {t.title}
+                </span>
+                <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-subtle)" }}>{formatDue(t.due_at)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/* All tasks table */}
+      <section>
+        <h2 style={{ margin: "0 0 var(--space-3) 0", fontSize: "var(--text-sm)", fontWeight: "var(--font-semibold)", color: "var(--color-text-muted)", letterSpacing: "0.02em", textTransform: "uppercase" }}>
+          All tasks
+        </h2>
       {tasks.length === 0 ? (
         <EmptyState
           title="No tasks yet"
@@ -229,6 +391,119 @@ export function TasksClient({
           </Table>
         </div>
       )}
+      </section>
+
+      <Dialog open={granolaOpen} onClose={() => !submitting && (setGranolaOpen(false), setGranolaSelectedId(""))} title="Import from Granola">
+        <p style={{ margin: "0 0 var(--space-3) 0", fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
+          Choose a transcript to import action items as tasks. Due date applies to all imported tasks.
+        </p>
+        {granolaLoading ? (
+          <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>Loading documents…</p>
+        ) : granolaDocs.length === 0 ? (
+          <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
+            No documents found. Configure GRANOLA_MCP_URL in Settings (and .env.local).
+          </p>
+        ) : (
+          <form onSubmit={handleImportFromGranola} style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+            <div>
+              <label style={{ fontSize: "var(--text-sm)", fontWeight: "var(--font-medium)", display: "block", marginBottom: "var(--space-2)" }}>Transcript</label>
+              <select
+                value={granolaSelectedId}
+                onChange={(e) => setGranolaSelectedId(e.target.value)}
+                required
+                style={{
+                  width: "100%",
+                  padding: "var(--space-2) var(--space-3)",
+                  borderRadius: "var(--radius-md)",
+                  border: "1px solid var(--color-border)",
+                  fontSize: "var(--text-sm)",
+                  backgroundColor: "var(--color-bg)",
+                }}
+              >
+                <option value="">Select one…</option>
+                {granolaDocs.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.title ?? d.id}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: "var(--text-sm)", fontWeight: "var(--font-medium)", display: "block", marginBottom: "var(--space-2)" }}>Due</label>
+              <select
+                value={granolaDue}
+                onChange={(e) => setGranolaDue(e.target.value as "today" | "week")}
+                style={{
+                  padding: "var(--space-2) var(--space-3)",
+                  borderRadius: "var(--radius-md)",
+                  border: "1px solid var(--color-border)",
+                  fontSize: "var(--text-sm)",
+                  backgroundColor: "var(--color-bg)",
+                }}
+              >
+                <option value="today">Today</option>
+                <option value="week">End of week (Friday)</option>
+              </select>
+            </div>
+            <div style={{ display: "flex", gap: "var(--space-3)", justifyContent: "flex-end", marginTop: "var(--space-2)" }}>
+              <Button type="button" variant="secondary" onClick={() => setGranolaOpen(false)} disabled={submitting}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={submitting || !granolaSelectedId}>
+                {submitting ? "Importing…" : "Import tasks"}
+              </Button>
+            </div>
+          </form>
+        )}
+      </Dialog>
+
+      <Dialog open={meetingOpen} onClose={() => !submitting && (setMeetingOpen(false), setMeetingPaste(""))} title="Add from meeting">
+        <p style={{ margin: "0 0 var(--space-3) 0", fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
+          Paste action items from Granola or meeting notes. One task per line.
+        </p>
+        <form onSubmit={handleAddFromMeeting} style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+          <textarea
+            value={meetingPaste}
+            onChange={(e) => setMeetingPaste(e.target.value)}
+            placeholder={"Follow up with client\nSend proposal by Friday\nUpdate roadmap"}
+            rows={8}
+            style={{
+              width: "100%",
+              padding: "var(--space-3)",
+              fontSize: "var(--text-sm)",
+              border: "1px solid var(--color-border)",
+              borderRadius: "var(--radius-md)",
+              resize: "vertical",
+              fontFamily: "inherit",
+            }}
+          />
+          <div>
+            <label style={{ fontSize: "var(--text-sm)", fontWeight: "var(--font-medium)", display: "block", marginBottom: "var(--space-2)" }}>Due</label>
+            <select
+              value={meetingDue}
+              onChange={(e) => setMeetingDue(e.target.value as "today" | "week")}
+              style={{
+                padding: "var(--space-2) var(--space-3)",
+                borderRadius: "var(--radius-md)",
+                border: "1px solid var(--color-border)",
+                fontSize: "var(--text-sm)",
+                backgroundColor: "var(--color-bg)",
+              }}
+            >
+              <option value="today">Today</option>
+              <option value="week">End of week (Friday)</option>
+            </select>
+          </div>
+          <div style={{ display: "flex", gap: "var(--space-3)", justifyContent: "flex-end", marginTop: "var(--space-2)" }}>
+            <Button type="button" variant="secondary" onClick={() => setMeetingOpen(false)} disabled={submitting}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={submitting || meetingLines.length === 0}>
+              {submitting ? "Adding…" : `Add ${meetingLines.length} task${meetingLines.length === 1 ? "" : "s"}`}
+            </Button>
+          </div>
+        </form>
+      </Dialog>
 
       <Dialog open={addOpen} onClose={() => !submitting && setAddOpen(false)} title="Add task">
         <form onSubmit={handleAdd} style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>

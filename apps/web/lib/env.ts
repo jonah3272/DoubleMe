@@ -48,3 +48,15 @@ export function getSupabaseServiceRoleKeyOrThrow(): string {
   }
   return key;
 }
+
+const DEFAULT_GRANOLA_MCP_URL = "https://mcp.granola.ai/mcp";
+
+/** Granola MCP server URL. Defaults to https://mcp.granola.ai/mcp if not set. */
+export function getGranolaMcpUrlOptional(): string | undefined {
+  return process.env.GRANOLA_MCP_URL?.trim() || DEFAULT_GRANOLA_MCP_URL;
+}
+
+/** Granola API token for MCP auth. Optional. */
+export function getGranolaApiTokenOptional(): string | undefined {
+  return process.env.GRANOLA_API_TOKEN?.trim() || undefined;
+}

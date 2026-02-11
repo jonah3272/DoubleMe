@@ -1,10 +1,12 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isValidProjectId } from "@/lib/validators";
+import { getGranolaMcpUrlOptional } from "@/lib/env";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { ProjectSidebar } from "../project-sidebar";
 import { ProjectTools } from "../project-tools";
+import { GranolaSection } from "./granola-section";
 import { TeammatesSection } from "./teammates-section";
 import { CalendarSection } from "./calendar-section";
 import { FigmaSection } from "./figma-section";
@@ -60,6 +62,7 @@ export default async function ProjectSettingsPage({
         <div id="tools">
           <ProjectTools projectId={id} enabledAgentKeys={enabledAgentKeys} />
         </div>
+        <GranolaSection configured={!!getGranolaMcpUrlOptional()} />
         <TeammatesSection projectId={id} initialContacts={initialContacts} />
         <CalendarSection projectId={id} initialEvents={initialEvents} />
         <FigmaSection projectId={id} initialLinks={initialFigmaLinks} />
