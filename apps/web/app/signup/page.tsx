@@ -21,9 +21,9 @@ export default function SignUpPage() {
     setLoading(true);
     setMessage(null);
     const result = await createUserNoEmail(email.trim(), password);
-    if (!result.ok) {
+    if (!result?.ok) {
       setLoading(false);
-      setMessage({ type: "error", text: result.error ?? "Signup failed." });
+      setMessage({ type: "error", text: result?.error ?? "Signup failed." });
       return;
     }
     const supabase = createClient();
