@@ -13,29 +13,33 @@ import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 /**
  * Server anon client (session from cookies). RLS applies.
- * Returns null when Supabase env vars are missing.
+ * Returns null when Supabase env vars are missing or when client creation fails (e.g. invalid key).
  */
 async function createAnonClient(): Promise<ReturnType<typeof createServerClient> | null> {
   const url = getSupabaseUrlOptional();
   const anonKey = getSupabaseAnonKeyOptional();
   if (!url || !anonKey) return null;
-  const cookieStore = await cookies();
-  return createServerClient(url, anonKey, {
-    cookies: {
-      getAll() {
-        return cookieStore.getAll();
+  try {
+    const cookieStore = await cookies();
+    return createServerClient(url, anonKey, {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet: { name: string; value: string; options?: object }[]) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            );
+          } catch {
+            // Ignore in Server Components / Route Handlers that can't set cookies
+          }
+        },
       },
-      setAll(cookiesToSet: { name: string; value: string; options?: object }[]) {
-        try {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          );
-        } catch {
-          // Ignore in Server Components / Route Handlers that can't set cookies
-        }
-      },
-    },
-  });
+    });
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -56,17 +60,22 @@ export async function createClient() {
 /**
  * Current user for the request. When AUTH_BYPASS is set, returns the bypass user
  * (BYPASS_USER_ID / BYPASS_EMAIL). Otherwise returns the session user or null.
- * Returns null when Supabase env vars are missing (avoids server crash).
+ * Returns null when Supabase env vars are missing or when Supabase errors (e.g. invalid key).
  */
 export async function getCurrentUser(): Promise<CurrentUser | null> {
   if (isAuthBypass()) {
     return getBypassUser();
   }
-  const supabase = await createAnonClient();
-  if (!supabase) return null;
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return null;
-  return { id: user.id, email: user.email ?? null };
+  try {
+    const supabase = await createAnonClient();
+    if (!supabase) return null;
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
+    if (error || !user) return null;
+    return { id: user.id, email: user.email ?? null };
+  } catch {
+    return null;
+  }
 }
