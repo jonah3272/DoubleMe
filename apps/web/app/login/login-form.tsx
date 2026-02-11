@@ -14,30 +14,10 @@ export function LoginForm() {
   const next = searchParams.get("next") ?? "/dashboard";
   const [email, setEmail] = useState("Jonahrehbeinjones@gmail.com");
   const [password, setPassword] = useState("");
-  const [mode, setMode] = useState<"magic" | "password">("password");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  const handleMagicLink = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setMessage(null);
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
-      },
-    });
-    setLoading(false);
-    if (error) {
-      setMessage({ type: "error", text: error.message });
-      return;
-    }
-    setMessage({ type: "success", text: "Check your email for the sign-in link." });
-  };
-
-  const handlePassword = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setMessage(null);
@@ -88,7 +68,7 @@ export function LoginForm() {
         </CardHeader>
         <CardContent style={{ padding: "0 var(--space-8) var(--space-8)" }}>
           <form
-            onSubmit={mode === "magic" ? handleMagicLink : handlePassword}
+            onSubmit={handleSubmit}
             style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}
           >
             <div>
@@ -114,30 +94,28 @@ export function LoginForm() {
                 aria-label="Email"
               />
             </div>
-            {mode === "password" && (
-              <div>
-                <label
-                  htmlFor="password"
-                  style={{
-                    display: "block",
-                    marginBottom: "var(--space-2)",
-                    fontSize: "var(--text-sm)",
-                    fontWeight: "var(--font-medium)",
-                  }}
-                >
-                  Password
-                </label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  autoComplete="current-password"
-                  aria-label="Password"
-                />
-              </div>
-            )}
+            <div>
+              <label
+                htmlFor="password"
+                style={{
+                  display: "block",
+                  marginBottom: "var(--space-2)",
+                  fontSize: "var(--text-sm)",
+                  fontWeight: "var(--font-medium)",
+                }}
+              >
+                Password
+              </label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                autoComplete="current-password"
+                aria-label="Password"
+              />
+            </div>
             {message && (
               <p
                 style={{
@@ -150,26 +128,8 @@ export function LoginForm() {
               </p>
             )}
             <Button type="submit" fullWidth disabled={loading}>
-              {loading ? "Please wait…" : mode === "magic" ? "Send magic link" : "Sign in"}
+              {loading ? "Please wait…" : "Sign in"}
             </Button>
-            <button
-              type="button"
-              onClick={() => {
-                setMode(mode === "magic" ? "password" : "magic");
-                setMessage(null);
-              }}
-              style={{
-                background: "none",
-                border: "none",
-                padding: 0,
-                fontSize: "var(--text-sm)",
-                color: "var(--color-text-muted)",
-                cursor: "pointer",
-                textAlign: "left",
-              }}
-            >
-              {mode === "magic" ? "Sign in with password instead" : "Use magic link instead"}
-            </button>
           </form>
           <p style={{ marginTop: "var(--space-6)", marginBottom: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
             No account?{" "}
