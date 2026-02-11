@@ -25,6 +25,16 @@ export function getSupabaseAnonKey(): string {
   return getEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
 }
 
+/** Supabase URL if set (does not throw). Use when env may be missing (e.g. server render). */
+export function getSupabaseUrlOptional(): string | undefined {
+  return process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || undefined;
+}
+
+/** Anon key if set (does not throw). Use when env may be missing. */
+export function getSupabaseAnonKeyOptional(): string | undefined {
+  return process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() || undefined;
+}
+
 /** Service role key; server-only, never expose to client. Optional. */
 export function getSupabaseServiceRoleKey(): string | undefined {
   return getEnvOptional("SUPABASE_SERVICE_ROLE_KEY");

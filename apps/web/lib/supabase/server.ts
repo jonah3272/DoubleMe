@@ -3,16 +3,23 @@ import { cookies } from "next/headers";
 
 import { getBypassUser, isAuthBypass } from "@/lib/auth-bypass";
 import type { CurrentUser } from "@/lib/auth-bypass";
-import { getSupabaseUrl, getSupabaseAnonKey } from "@/lib/env";
+import {
+  getSupabaseUrl,
+  getSupabaseAnonKey,
+  getSupabaseUrlOptional,
+  getSupabaseAnonKeyOptional,
+} from "@/lib/env";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 /**
  * Server anon client (session from cookies). RLS applies.
+ * Returns null when Supabase env vars are missing.
  */
-async function createAnonClient() {
+async function createAnonClient(): Promise<ReturnType<typeof createServerClient> | null> {
+  const url = getSupabaseUrlOptional();
+  const anonKey = getSupabaseAnonKeyOptional();
+  if (!url || !anonKey) return null;
   const cookieStore = await cookies();
-  const url = getSupabaseUrl();
-  const anonKey = getSupabaseAnonKey();
   return createServerClient(url, anonKey, {
     cookies: {
       getAll() {
@@ -33,24 +40,30 @@ async function createAnonClient() {
 
 /**
  * Server Supabase client. When AUTH_BYPASS is set, returns service role (RLS bypassed).
- * Otherwise returns anon client with session. Use for all server-side data access.
+ * Otherwise returns anon client with session. Throws if env vars missing (use getCurrentUser for safe check).
  */
 export async function createClient() {
   if (isAuthBypass()) {
     return createServiceRoleClient();
   }
-  return createAnonClient();
+  const client = await createAnonClient();
+  if (!client) {
+    throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY");
+  }
+  return client;
 }
 
 /**
  * Current user for the request. When AUTH_BYPASS is set, returns the bypass user
  * (BYPASS_USER_ID / BYPASS_EMAIL). Otherwise returns the session user or null.
+ * Returns null when Supabase env vars are missing (avoids server crash).
  */
 export async function getCurrentUser(): Promise<CurrentUser | null> {
   if (isAuthBypass()) {
     return getBypassUser();
   }
   const supabase = await createAnonClient();
+  if (!supabase) return null;
   const {
     data: { user },
   } = await supabase.auth.getUser();
