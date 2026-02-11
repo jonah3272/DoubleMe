@@ -53,6 +53,33 @@ Configure env per app (see each app’s `.env*.example`). Do not commit files th
 
 Then open **http://localhost:3000** in your browser.
 
+**Local testing without Supabase:** From repo root run **`node run-local.js`**. It installs dependencies in `apps/web` if needed, then starts the dev server. Open **http://localhost:3000** — with no `.env.local` you'll be redirected to the preview (mock data). No database or env required.
+
+### Can't see it locally?
+
+1. **Install dependencies** (from repo root):
+   ```bash
+   pnpm install
+   ```
+   If you don't have pnpm: `npm install` inside `apps/web` (then run from there with `npm run dev`).
+
+2. **Env for the web app** — create `apps/web/.env.local` (copy from `apps/web/.env.local.example`). At minimum you need Supabase so auth works:
+   - `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` from your Supabase project.
+   - Optional dev shortcut: set `AUTH_BYPASS=true`, `BYPASS_USER_ID=<uuid>`, and `BYPASS_EMAIL=...` (and `SUPABASE_SERVICE_ROLE_KEY`) to skip login; see the example file.
+
+3. **Start the server** (from repo root):
+   ```bash
+   pnpm dev
+   ```
+   Or without pnpm: `node run-web.js` (requires `apps/web/node_modules` to exist), or `cd apps/web && npm run dev`.
+
+4. **Open the app** — go to **http://localhost:3000**. If the page is blank or errors, check the terminal for build/runtime errors. If port 3000 is in use, Next.js will print an alternate port (e.g. 3001).
+
+5. **"Internal Server Error" or 500** — Usually missing or invalid env. Check the **terminal** where `pnpm dev` is running for the real error. Ensure `apps/web/.env.local` exists with at least:
+   - `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` (from Supabase project settings).
+   - If using `AUTH_BYPASS=true`, also set `SUPABASE_SERVICE_ROLE_KEY` and `BYPASS_USER_ID`.
+   You can confirm env is loaded by opening **http://localhost:3000/api/env-check** (run the dev server first).
+
 ## Dev commands
 
 | Command | Description |

@@ -24,12 +24,14 @@ const contentVariants = {
 
 export function Dialog({ open, onClose, title, children }: DialogProps) {
   const previousActive = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) return;
     previousActive.current = document.activeElement as HTMLElement | null;
     const onEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") onCloseRef.current();
     };
     document.addEventListener("keydown", onEscape);
     document.body.style.overflow = "hidden";
@@ -38,7 +40,7 @@ export function Dialog({ open, onClose, title, children }: DialogProps) {
       document.body.style.overflow = "";
       previousActive.current?.focus();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   return (
     <AnimatePresence>

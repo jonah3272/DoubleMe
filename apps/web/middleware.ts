@@ -17,6 +17,7 @@ const isPublicPath = (pathname: string) => {
     pathname === "/" ||
     pathname === "/login" ||
     pathname === "/signup" ||
+    pathname === "/preview" ||
     pathname.startsWith("/auth/") ||
     pathname.startsWith("/ui") ||
     pathname.startsWith("/_next") ||
@@ -42,10 +43,10 @@ export async function middleware(request: NextRequest) {
 
   const env = getSupabaseEnv();
   if (!env) {
-    if (isProtectedPath(request.nextUrl.pathname)) {
-      const redirectUrl = new URL("/login", request.url);
-      redirectUrl.searchParams.set("next", request.nextUrl.pathname);
-      return NextResponse.redirect(redirectUrl);
+    // No Supabase config: send everyone to preview so the app runs locally without setup
+    const pathname = request.nextUrl.pathname;
+    if (pathname !== "/preview" && !pathname.startsWith("/_next") && !pathname.startsWith("/api")) {
+      return NextResponse.redirect(new URL("/preview", request.url));
     }
     return response;
   }

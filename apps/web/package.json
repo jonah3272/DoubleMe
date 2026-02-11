@@ -20,12 +20,12 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "playwright": "^1.49.0",
     "@types/node": "^22.9.0",
     "@types/react": "^19.0.1",
     "@types/react-dom": "^19.0.1",
     "eslint": "^9.15.0",
     "eslint-config-next": "15.0.5",
-    "typescript": "^5.6.3"
+    "playwright": "^1.49.0",
+    "typescript": "5.9.3"
   }
 }

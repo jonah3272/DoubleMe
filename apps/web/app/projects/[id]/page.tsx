@@ -33,8 +33,8 @@ export default async function ProjectWorkspacePage({
     convRes,
     artRes,
     { data: nextTasksData },
-    { data: latestConv },
-    { data: latestArtifact },
+    { data: recentConvs },
+    { data: recentArtifacts },
   ] = await Promise.all([
     supabase.from("tasks").select("id", { count: "exact", head: true }).eq("project_id", id),
     supabase.from("contacts").select("id", { count: "exact", head: true }).eq("project_id", id),
@@ -46,9 +46,19 @@ export default async function ProjectWorkspacePage({
       .eq("project_id", id)
       .in("status", ["todo", "in_progress"])
       .order("due_at", { ascending: true, nullsFirst: false })
-      .limit(3),
-    supabase.from("conversations").select("id, title, updated_at").eq("project_id", id).order("updated_at", { ascending: false }).limit(1).maybeSingle(),
-    supabase.from("artifacts").select("id, title, updated_at").eq("project_id", id).order("updated_at", { ascending: false }).limit(1).maybeSingle(),
+      .limit(5),
+    supabase
+      .from("conversations")
+      .select("id, title, updated_at")
+      .eq("project_id", id)
+      .order("updated_at", { ascending: false })
+      .limit(15),
+    supabase
+      .from("artifacts")
+      .select("id, title, updated_at")
+      .eq("project_id", id)
+      .order("updated_at", { ascending: false })
+      .limit(15),
   ]);
   const [upcomingRes, figmaRes] = await Promise.all([
     supabase
@@ -72,8 +82,8 @@ export default async function ProjectWorkspacePage({
   const conversationsCount = convRes.count ?? 0;
   const artifactsCount = artRes.count ?? 0;
   const nextTasks = nextTasksData ?? [];
-  const latestThread = latestConv ?? null;
-  const latestArt = latestArtifact ?? null;
+  const recentThreads = recentConvs ?? [];
+  const recentArtifactsList = recentArtifacts ?? [];
 
   return (
     <AppShell sidebar={<ProjectSidebar projectId={id} projectName={project.name} />}>
@@ -98,8 +108,8 @@ export default async function ProjectWorkspacePage({
           conversationsCount={conversationsCount}
           artifactsCount={artifactsCount}
           nextTasks={nextTasks}
-          latestThread={latestThread}
-          latestArtifact={latestArt}
+          recentThreads={recentThreads}
+          recentArtifacts={recentArtifactsList}
           upcomingEvents={upcomingEvents}
           figmaLinks={figmaLinks}
         />
