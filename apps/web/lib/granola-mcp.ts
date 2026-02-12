@@ -51,7 +51,34 @@ async function postMessage(url: string, token: string | undefined, message: Json
     throw new Error(`Granola MCP: ${res.status} ${res.statusText}`);
   }
 
-  const data = (await res.json()) as JsonRpcResponse;
+  const contentType = res.headers.get("content-type") ?? "";
+  const text = await res.text();
+
+  let data: JsonRpcResponse;
+  if (contentType.includes("text/event-stream")) {
+    // Server chose SSE: parse "data: {...}" lines (may be multiple lines for one event)
+    const lines = text.split(/\n/);
+    const dataParts: string[] = [];
+    for (const line of lines) {
+      if (line.startsWith("data:")) {
+        dataParts.push(line.slice(5).trimStart());
+      }
+    }
+    const jsonStr = dataParts.join("\n");
+    if (!jsonStr) throw new Error("Granola MCP: no data in SSE response");
+    try {
+      data = JSON.parse(jsonStr) as JsonRpcResponse;
+    } catch {
+      throw new Error("Granola MCP: invalid JSON in SSE response");
+    }
+  } else {
+    try {
+      data = JSON.parse(text) as JsonRpcResponse;
+    } catch {
+      throw new Error(`Granola MCP: invalid JSON response`);
+    }
+  }
+
   if (data.error) {
     throw new Error(`Granola MCP: ${data.error.message}`);
   }
