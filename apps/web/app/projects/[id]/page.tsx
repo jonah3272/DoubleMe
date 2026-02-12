@@ -42,11 +42,11 @@ export default async function ProjectWorkspacePage({
     supabase.from("artifacts").select("id", { count: "exact", head: true }).eq("project_id", id),
     supabase
       .from("tasks")
-      .select("id, title, status")
+      .select("id, title, status, due_at")
       .eq("project_id", id)
       .in("status", ["todo", "in_progress"])
       .order("due_at", { ascending: true, nullsFirst: false })
-      .limit(5),
+      .limit(10),
     supabase
       .from("conversations")
       .select("id, title, updated_at")

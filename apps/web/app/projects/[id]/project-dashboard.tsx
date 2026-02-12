@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui";
 import { FromGranolaTrigger } from "./from-granola-trigger";
+import { DashboardActivityFeed } from "./dashboard-activity-feed";
 
 const CHATGPT_URL = "https://chat.openai.com";
 
-type NextTask = { id: string; title: string; status: string };
+type NextTask = { id: string; title: string; status: string; due_at: string | null };
 type FeedThread = { id: string; title: string | null; updated_at: string };
 type FeedArtifact = { id: string; title: string; updated_at: string };
 type UpcomingEvent = { id: string; title: string; start_at: string; end_at: string; link: string | null };
@@ -56,6 +57,38 @@ function figmaDisplayName(link: FigmaLink) {
   return link.name || link.url.replace(/^https?:\/\//, "").slice(0, 32) + (link.url.length > 32 ? "…" : "");
 }
 
+function formatDueShort(dueAt: string | null): string {
+  if (!dueAt) return "No date";
+  const d = new Date(dueAt);
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  if (d.toDateString() === today.toDateString()) return "Today";
+  if (d.toDateString() === tomorrow.toDateString()) return "Tomorrow";
+  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+}
+
+function groupTasksByDue(tasks: NextTask[]): { today: NextTask[]; thisWeek: NextTask[] } {
+  const now = new Date();
+  const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+  const endOfWeek = new Date(now);
+  endOfWeek.setDate(now.getDate() + (7 - now.getDay()));
+  endOfWeek.setHours(23, 59, 59, 999);
+  const today: NextTask[] = [];
+  const thisWeek: NextTask[] = [];
+  for (const t of tasks) {
+    if (!t.due_at) {
+      thisWeek.push(t);
+      continue;
+    }
+    const due = new Date(t.due_at);
+    if (due <= endOfToday) today.push(t);
+    else if (due <= endOfWeek) thisWeek.push(t);
+    else thisWeek.push(t);
+  }
+  return { today, thisWeek };
+}
+
 type FeedItem =
   | { type: "thread"; id: string; title: string; updated_at: string; threadId: string }
   | { type: "artifact"; id: string; title: string; updated_at: string };
@@ -95,6 +128,11 @@ export function ProjectDashboard({
 }: DashboardProps) {
   const feedItems = mergeFeed(recentThreads, recentArtifacts);
   const hasActivity = feedItems.length > 0;
+  const { today: tasksToday, thisWeek: tasksThisWeek } = groupTasksByDue(nextTasks);
+  const nextEventLabel =
+    upcomingEvents.length > 0
+      ? formatEventTime(upcomingEvents[0].start_at)
+      : null;
 
   return (
     <div
@@ -171,6 +209,133 @@ export function ProjectDashboard({
         </div>
       </div>
 
+      {/* Metrics strip – at a glance (Vercel/Stripe style) */}
+      <div
+        data-dashboard-metrics
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
+          gap: "var(--space-3)",
+        }}
+      >
+        <Link
+          href={`/projects/${projectId}/tasks`}
+          style={{
+            display: "block",
+            padding: "var(--space-4)",
+            background: "var(--color-bg-elevated)",
+            border: "1px solid var(--color-border)",
+            borderRadius: "var(--radius-lg)",
+            textDecoration: "none",
+            color: "inherit",
+          }}
+        >
+          <span style={{ fontSize: "var(--text-2xl)", fontWeight: "var(--font-bold)", color: "var(--color-text)" }}>
+            {tasksCount}
+          </span>
+          <span style={{ display: "block", fontSize: "var(--text-sm)", color: "var(--color-text-muted)", marginTop: "var(--space-1)" }}>
+            Tasks
+          </span>
+        </Link>
+        <Link
+          href={`/projects/${projectId}/threads`}
+          style={{
+            display: "block",
+            padding: "var(--space-4)",
+            background: "var(--color-bg-elevated)",
+            border: "1px solid var(--color-border)",
+            borderRadius: "var(--radius-lg)",
+            textDecoration: "none",
+            color: "inherit",
+          }}
+        >
+          <span style={{ fontSize: "var(--text-2xl)", fontWeight: "var(--font-bold)", color: "var(--color-text)" }}>
+            {conversationsCount}
+          </span>
+          <span style={{ display: "block", fontSize: "var(--text-sm)", color: "var(--color-text-muted)", marginTop: "var(--space-1)" }}>
+            Threads
+          </span>
+        </Link>
+        <Link
+          href={`/projects/${projectId}/artifacts`}
+          style={{
+            display: "block",
+            padding: "var(--space-4)",
+            background: "var(--color-bg-elevated)",
+            border: "1px solid var(--color-border)",
+            borderRadius: "var(--radius-lg)",
+            textDecoration: "none",
+            color: "inherit",
+          }}
+        >
+          <span style={{ fontSize: "var(--text-2xl)", fontWeight: "var(--font-bold)", color: "var(--color-text)" }}>
+            {artifactsCount}
+          </span>
+          <span style={{ display: "block", fontSize: "var(--text-sm)", color: "var(--color-text-muted)", marginTop: "var(--space-1)" }}>
+            Artifacts
+          </span>
+        </Link>
+        {upcomingEvents.length > 0 && upcomingEvents[0].link ? (
+          <a
+            href={upcomingEvents[0].link}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: "block",
+              padding: "var(--space-4)",
+              background: "var(--color-bg-elevated)",
+              border: "1px solid var(--color-border)",
+              borderRadius: "var(--radius-lg)",
+              textDecoration: "none",
+              color: "inherit",
+            }}
+          >
+            <span
+              style={{
+                fontSize: "var(--text-sm)",
+                fontWeight: "var(--font-semibold)",
+                color: "var(--color-text)",
+                display: "block",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {nextEventLabel}
+            </span>
+            <span style={{ display: "block", fontSize: "var(--text-xs)", color: "var(--color-text-muted)", marginTop: "var(--space-1)" }}>
+              Next event
+            </span>
+          </a>
+        ) : (
+          <div
+            style={{
+              padding: "var(--space-4)",
+              background: "var(--color-bg-elevated)",
+              border: "1px solid var(--color-border)",
+              borderRadius: "var(--radius-lg)",
+            }}
+          >
+            <span
+              style={{
+                fontSize: "var(--text-sm)",
+                fontWeight: "var(--font-semibold)",
+                color: "var(--color-text)",
+                display: "block",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {nextEventLabel ?? "No upcoming events"}
+            </span>
+            <span style={{ display: "block", fontSize: "var(--text-xs)", color: "var(--color-text-muted)", marginTop: "var(--space-1)" }}>
+              Next event
+            </span>
+          </div>
+        )}
+      </div>
+
       {/* Main: feed + sidebar */}
       <div
         data-dashboard-grid
@@ -181,21 +346,21 @@ export function ProjectDashboard({
           alignItems: "start",
         }}
       >
-        {/* Activity feed */}
-        <div style={{ minWidth: 0 }}>
-          <h2
-            style={{
-              margin: "0 0 var(--space-4) 0",
-              fontSize: "var(--text-sm)",
-              fontWeight: "var(--font-semibold)",
-              color: "var(--color-text-muted)",
-              letterSpacing: "0.02em",
-              textTransform: "uppercase",
-            }}
-          >
-            Activity
-          </h2>
-          {!hasActivity ? (
+        {/* Activity feed with tabs (Notion/ClickUp style) */}
+        {!hasActivity ? (
+          <div style={{ minWidth: 0 }}>
+            <h2
+              style={{
+                margin: "0 0 var(--space-4) 0",
+                fontSize: "var(--text-sm)",
+                fontWeight: "var(--font-semibold)",
+                color: "var(--color-text-muted)",
+                letterSpacing: "0.02em",
+                textTransform: "uppercase",
+              }}
+            >
+              Activity
+            </h2>
             <Card variant="outlined">
               <CardContent style={{ padding: "var(--space-8)" }}>
                 <p
@@ -223,88 +388,10 @@ export function ProjectDashboard({
                 </div>
               </CardContent>
             </Card>
-          ) : (
-            <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
-              {feedItems.map((item) => (
-                <li key={item.id}>
-                  <Link
-                    href={
-                      item.type === "thread"
-                        ? `/projects/${projectId}/threads/${item.threadId}`
-                        : `/projects/${projectId}/artifacts`
-                    }
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "var(--space-3)",
-                      padding: "var(--space-3) var(--space-2)",
-                      marginLeft: "-var(--space-2)",
-                      marginRight: "-var(--space-2)",
-                      borderRadius: "var(--radius-md)",
-                      textDecoration: "none",
-                      color: "inherit",
-                    }}
-                    className="feed-row"
-                  >
-                    <span
-                      style={{
-                        flexShrink: 0,
-                        width: 28,
-                        height: 28,
-                        borderRadius: "var(--radius-md)",
-                        backgroundColor: item.type === "thread" ? "var(--color-primary-muted)" : "var(--color-bg-muted)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: "var(--text-xs)",
-                        fontWeight: "var(--font-semibold)",
-                        color: item.type === "thread" ? "var(--color-primary)" : "var(--color-text-muted)",
-                      }}
-                    >
-                      {item.type === "thread" ? "T" : "A"}
-                    </span>
-                    <span
-                      style={{
-                        flex: 1,
-                        minWidth: 0,
-                        fontSize: "var(--text-sm)",
-                        fontWeight: "var(--font-medium)",
-                        color: "var(--color-text)",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {item.title}
-                    </span>
-                    <span
-                      style={{
-                        flexShrink: 0,
-                        fontSize: "var(--text-xs)",
-                        color: "var(--color-text-subtle)",
-                      }}
-                    >
-                      {formatRelative(item.updated_at)}
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-          {hasActivity && (
-            <p style={{ margin: "var(--space-3) 0 0 0", fontSize: "var(--text-sm)" }}>
-              <Link
-                href={`/projects/${projectId}/threads`}
-                style={{ color: "var(--color-primary)", textDecoration: "none", marginRight: "var(--space-3)" }}
-              >
-                Threads
-              </Link>
-              <Link href={`/projects/${projectId}/artifacts`} style={{ color: "var(--color-primary)", textDecoration: "none" }}>
-                Artifacts
-              </Link>
-            </p>
-          )}
-        </div>
+          </div>
+        ) : (
+          <DashboardActivityFeed projectId={projectId} feedItems={feedItems} />
+        )}
 
         {/* Sidebar: Up next, Upcoming, quick links */}
         <aside
@@ -317,7 +404,7 @@ export function ProjectDashboard({
             top: "var(--space-8)",
           }}
         >
-          {/* Up next – tasks */}
+          {/* Up next – tasks (Linear/Asana: Today / This week) */}
           <div>
             <h3
               style={{
@@ -337,25 +424,100 @@ export function ProjectDashboard({
                 </Link>
               </p>
             ) : (
-              <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
-                {nextTasks.map((t) => (
-                  <li key={t.id} style={{ marginBottom: "var(--space-2)" }}>
-                    <Link
-                      href={`/projects/${projectId}/tasks`}
+              <>
+                {tasksToday.length > 0 && (
+                  <div style={{ marginBottom: "var(--space-4)" }}>
+                    <span
                       style={{
-                        display: "block",
-                        fontSize: "var(--text-sm)",
-                        color: "var(--color-text)",
-                        textDecoration: "none",
-                        padding: "var(--space-2) 0",
-                        borderBottom: "1px solid var(--color-border-subtle)",
+                        fontSize: "var(--text-xs)",
+                        fontWeight: "var(--font-semibold)",
+                        color: "var(--color-primary)",
+                        letterSpacing: "0.02em",
+                        textTransform: "uppercase",
                       }}
                     >
-                      {t.title}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
+                      Today
+                    </span>
+                    <ul style={{ margin: "var(--space-2) 0 0 0", padding: 0, listStyle: "none" }}>
+                      {tasksToday.map((t) => (
+                        <li key={t.id} style={{ marginBottom: "var(--space-2)" }}>
+                          <Link
+                            href={`/projects/${projectId}/tasks`}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "var(--space-2)",
+                              fontSize: "var(--text-sm)",
+                              color: "var(--color-text)",
+                              textDecoration: "none",
+                              padding: "var(--space-2) 0",
+                              borderBottom: "1px solid var(--color-border-subtle)",
+                            }}
+                          >
+                            <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {t.title}
+                            </span>
+                            <span
+                              style={{
+                                flexShrink: 0,
+                                fontSize: "var(--text-xs)",
+                                padding: "2px 6px",
+                                borderRadius: "var(--radius-sm)",
+                                background: "var(--color-primary-muted)",
+                                color: "var(--color-primary)",
+                                fontWeight: "var(--font-medium)",
+                              }}
+                            >
+                              Today
+                            </span>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {tasksThisWeek.length > 0 && (
+                  <div>
+                    <span
+                      style={{
+                        fontSize: "var(--text-xs)",
+                        fontWeight: "var(--font-semibold)",
+                        color: "var(--color-text-muted)",
+                        letterSpacing: "0.02em",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      This week
+                    </span>
+                    <ul style={{ margin: "var(--space-2) 0 0 0", padding: 0, listStyle: "none" }}>
+                      {tasksThisWeek.map((t) => (
+                        <li key={t.id} style={{ marginBottom: "var(--space-2)" }}>
+                          <Link
+                            href={`/projects/${projectId}/tasks`}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "var(--space-2)",
+                              fontSize: "var(--text-sm)",
+                              color: "var(--color-text)",
+                              textDecoration: "none",
+                              padding: "var(--space-2) 0",
+                              borderBottom: "1px solid var(--color-border-subtle)",
+                            }}
+                          >
+                            <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {t.title}
+                            </span>
+                            <span style={{ flexShrink: 0, fontSize: "var(--text-xs)", color: "var(--color-text-subtle)" }}>
+                              {formatDueShort(t.due_at)}
+                            </span>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </>
             )}
             <Link
               href={`/projects/${projectId}/tasks`}
@@ -454,7 +616,7 @@ export function ProjectDashboard({
         </aside>
       </div>
 
-      {/* Responsive: stack on narrow */}
+      {/* Responsive: stack on narrow; metrics 2-col on small */}
       <style>{`
         @media (max-width: 768px) {
           [data-dashboard-grid] {
@@ -462,6 +624,11 @@ export function ProjectDashboard({
           }
           [data-dashboard-sidebar] {
             position: static !important;
+          }
+        }
+        @media (max-width: 480px) {
+          [data-dashboard-metrics] {
+            grid-template-columns: repeat(2, 1fr) !important;
           }
         }
         .feed-row:hover {
