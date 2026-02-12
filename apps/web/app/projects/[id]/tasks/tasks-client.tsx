@@ -67,6 +67,7 @@ export function TasksClient({
   const [granolaSelectedListTool, setGranolaSelectedListTool] = useState("");
   const [granolaSearchQuery, setGranolaSearchQuery] = useState("");
   const [granolaListFetched, setGranolaListFetched] = useState(false);
+  const [granolaListDebug, setGranolaListDebug] = useState<string | null>(null);
   const [granolaSelectedId, setGranolaSelectedId] = useState("");
   const [granolaDue, setGranolaDue] = useState<"today" | "week">("week");
   const [editOpen, setEditOpen] = useState(false);
@@ -271,12 +272,15 @@ export function TasksClient({
   const handleLoadGranolaMeetings = async () => {
     if (!granolaSelectedListTool) return;
     setGranolaListError(null);
+    setGranolaListDebug(null);
     setGranolaLoadingList(true);
     const result = await listGranolaDocumentsAction(granolaSelectedListTool, granolaSearchQuery || undefined);
     setGranolaLoadingList(false);
     setGranolaListFetched(true);
-    if (result.ok) setGranolaDocs(result.documents);
-    else {
+    if (result.ok) {
+      setGranolaDocs(result.documents);
+      setGranolaListDebug(result.debug ?? null);
+    } else {
       setGranolaListError(result.error);
       addToast(result.error, "error");
     }
@@ -457,7 +461,7 @@ export function TasksClient({
               <label style={{ fontSize: "var(--text-sm)", fontWeight: "var(--font-medium)", display: "block", marginBottom: "var(--space-2)" }}>List tool</label>
               <select
                 value={granolaSelectedListTool}
-                onChange={(e) => { setGranolaSelectedListTool(e.target.value); setGranolaListError(null); setGranolaListFetched(false); }}
+                onChange={(e) => { setGranolaSelectedListTool(e.target.value); setGranolaListError(null); setGranolaListDebug(null); setGranolaListFetched(false); }}
                 style={{
                   width: "100%",
                   padding: "var(--space-2) var(--space-3)",
@@ -491,7 +495,15 @@ export function TasksClient({
               </div>
             )}
             {granolaListFetched && granolaDocs.length === 0 && !granolaListError && (
-              <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>No meetings returned. Try another list tool above.</p>
+              <>
+                <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>No meetings returned. Try another list tool above.</p>
+                {granolaListDebug && (
+                  <div style={{ padding: "var(--space-3)", background: "var(--color-surface-elevated)", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", fontSize: "var(--text-xs)", fontFamily: "monospace", whiteSpace: "pre-wrap", wordBreak: "break-all", color: "var(--color-text-muted)", maxHeight: 200, overflow: "auto" }}>
+                    <strong style={{ color: "var(--color-text)" }}>Debug (set GRANOLA_DEBUG=1)</strong>
+                    <pre style={{ margin: "var(--space-2) 0 0 0" }}>{granolaListDebug}</pre>
+                  </div>
+                )}
+              </>
             )}
             {granolaListFetched && granolaDocs.length > 0 && (
           <form onSubmit={handleImportFromGranola} style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>

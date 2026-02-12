@@ -168,12 +168,14 @@ export async function listGranolaMcpTools(accessToken?: string): Promise<{
   return { allTools, listTools: allTools, defaultListTool };
 }
 
+export type ListGranolaDocumentsResult = { documents: GranolaDocument[]; debug?: string };
+
 /** List tools from Granola MCP and call the one that lists documents/transcripts. */
 export async function listGranolaDocuments(
   accessToken?: string,
   preferredListTool?: string,
   searchQuery?: string
-): Promise<GranolaDocument[]> {
+): Promise<ListGranolaDocumentsResult> {
   const url = getGranolaMcpUrlOptional();
   if (!url) throw new Error("Granola MCP URL is not set.");
   const token = accessToken ?? getGranolaApiTokenOptional();
@@ -196,16 +198,15 @@ export async function listGranolaDocuments(
     throw new Error("Granola MCP does not expose a list documents/transcripts tool. Available: " + (toolNames.length ? toolNames.join(", ") : "none"));
   }
 
-  // search_meetings: use custom query if provided, else "*" (empty often returns nothing)
+  // Official Granola: list_meetings / get_meetings / query_granola_meetings may accept {} or limit
   const listArgs =
     listTool === "search_meetings"
       ? { query: (searchQuery?.trim() || "*"), limit: 100 }
-      : listTool === "list_granola_documents" ||
-          listTool === "get_meetings" ||
-          listTool === "query_granola_meetings" ||
-          listTool === "list_meetings"
+      : listTool === "list_granola_documents"
         ? { limit: 100 }
-        : {};
+        : listTool === "list_meetings" || listTool === "get_meetings" || listTool === "query_granola_meetings"
+          ? { limit: 50 }
+          : {};
   const callRes = await postMessage(url, token, {
     jsonrpc: "2.0",
     id: "tools-call-list",
@@ -217,12 +218,25 @@ export async function listGranolaDocuments(
   });
 
   const text = extractTextFromToolResult(callRes.result);
-  if (!text) return [];
+  if (!text) {
+    const debug =
+      process.env.GRANOLA_DEBUG ?
+        `No text in response. Raw (first 800 chars): ${typeof callRes.result === "string" ? callRes.result : JSON.stringify(callRes.result ?? {}).slice(0, 800)}`
+      : undefined;
+    return { documents: [], debug };
+  }
 
   const raw = parseListResponse(text);
-  return raw
+  const documents = raw
     .map(normalizeGranolaDocument)
     .filter((d) => d.id || d.title);
+
+  const debug =
+    documents.length === 0 && process.env.GRANOLA_DEBUG
+      ? `Tool: ${listTool}. Raw text (first 600 chars): ${text.slice(0, 600)}`
+      : undefined;
+
+  return { documents, debug };
 }
 
 /** Extract raw text from MCP tools/call result (content array or inline text). */
@@ -237,22 +251,57 @@ function extractTextFromToolResult(result: unknown): string {
     if (parts.length) return parts.join("\n");
   }
   if (typeof (result as { text?: string }).text === "string") return (result as { text: string }).text;
+  if (typeof (result as { content?: string }).content === "string") return (result as { content: string }).content;
   if (typeof result === "string") return result;
+  // If result is an object that might be the list wrapper, stringify so parseListResponse can try it
+  if (typeof result === "object" && result !== null) {
+    const obj = result as Record<string, unknown>;
+    for (const key of ["meetings", "meeting_list", "meetingList", "documents", "results", "items", "data"]) {
+      if (Array.isArray(obj[key])) return JSON.stringify(result);
+    }
+  }
   return "";
+}
+
+/** Try to extract JSON string from markdown code block (e.g. ```json ... ```). */
+function extractJsonFromText(text: string): string {
+  const trimmed = text.trim();
+  const codeBlock = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (codeBlock?.[1]) return codeBlock[1].trim();
+  return trimmed;
 }
 
 /** Parse tool response into array of item objects; handles many common response shapes. */
 function parseListResponse(text: string): Record<string, unknown>[] {
+  const toParse = extractJsonFromText(text);
   let parsed: unknown;
   try {
-    parsed = JSON.parse(text);
+    parsed = JSON.parse(toParse);
   } catch {
     return [];
   }
-  if (Array.isArray(parsed)) return parsed as Record<string, unknown>[];
+  if (Array.isArray(parsed)) {
+    const arr = parsed as unknown[];
+    if (arr.length > 0 && typeof arr[0] === "object" && arr[0] !== null) return arr as Record<string, unknown>[];
+    if (arr.length > 0 && (typeof arr[0] === "string" || typeof arr[0] === "number"))
+      return arr.map((id) => ({ id: String(id), title: undefined }));
+  }
 
   const obj = parsed as Record<string, unknown>;
-  const knownKeys = ["documents", "transcripts", "meetings", "results", "items", "data", "hits", "list"];
+  const knownKeys = [
+    "documents",
+    "transcripts",
+    "meetings",
+    "meeting_list",
+    "meetingList",
+    "results",
+    "items",
+    "data",
+    "hits",
+    "list",
+    "meeting_ids",
+    "meetingIds",
+  ];
   for (const key of knownKeys) {
     const val = obj[key];
     if (Array.isArray(val) && val.length > 0 && typeof val[0] === "object" && val[0] !== null) {
@@ -277,16 +326,32 @@ function parseListResponse(text: string): Record<string, unknown>[] {
 
 function normalizeGranolaDocument(item: Record<string, unknown>): GranolaDocument {
   const id = String(
-    item.id ?? item.meeting_id ?? item.document_id ?? item._id ?? item.uuid ?? ""
+    item.id ??
+      item.meeting_id ??
+      item.document_id ??
+      item._id ??
+      item.uuid ??
+      (item as Record<string, unknown>).meetingId ??
+      ""
   );
-  const title = [item.title, item.name, item.subject, item.summary].find(
-    (t) => t != null
-  ) as string | undefined;
+  const title = [
+    item.title,
+    item.name,
+    item.subject,
+    item.summary,
+    (item as Record<string, unknown>).meeting_title,
+    (item as Record<string, unknown>).meeting_title_override,
+  ].find((t) => t != null) as string | undefined;
   return {
     id,
     title: title != null ? String(title) : undefined,
     type: item.type != null ? String(item.type) : undefined,
-    created_at: item.created_at != null ? String(item.created_at) : undefined,
+    created_at:
+      item.created_at != null
+        ? String(item.created_at)
+        : (item as Record<string, unknown>).meeting_date != null
+          ? String((item as Record<string, unknown>).meeting_date)
+          : undefined,
     updated_at: item.updated_at != null ? String(item.updated_at) : undefined,
   };
 }
@@ -331,28 +396,35 @@ export async function getGranolaTranscriptFull(documentId: string, accessToken?:
     },
   });
 
-  const content = (callRes.result as { content?: { type: string; text?: string }[] })?.content;
-  if (!content?.length || content[0].type !== "text") throw new Error("Empty transcript response.");
-  const text = content[0].text ?? "";
+  const text = extractTextFromToolResult(callRes.result);
+  if (!text?.trim()) throw new Error("Empty transcript response.");
   try {
-    const parsed = JSON.parse(text) as {
+    const parsed = JSON.parse(extractJsonFromText(text)) as {
       title?: string;
       content?: string;
       text?: string;
+      transcript?: string;
       created_at?: string;
       updated_at?: string;
       error?: string;
     };
     if (parsed.error) throw new Error(parsed.error);
+    const content = parsed.content ?? parsed.text ?? parsed.transcript ?? "";
     return {
       title: parsed.title?.trim() || "Meeting transcript",
-      content: parsed.content ?? parsed.text ?? "",
+      content: typeof content === "string" ? content : "",
       created_at: parsed.created_at,
       updated_at: parsed.updated_at,
     };
   } catch (e) {
-    if (e instanceof Error) throw e;
-    throw new Error("Invalid transcript response.");
+    if (e instanceof Error && e.message?.startsWith("Granola")) throw e;
+    // Plain-text or non-JSON response: use whole text as transcript
+    return {
+      title: "Meeting transcript",
+      content: text,
+      created_at: undefined,
+      updated_at: undefined,
+    };
   }
 }
 

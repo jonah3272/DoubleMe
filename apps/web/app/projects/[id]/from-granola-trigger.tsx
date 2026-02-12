@@ -26,6 +26,7 @@ export function FromGranolaTrigger({ projectId, variant = "button" }: { projectI
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [toolsError, setToolsError] = useState<string | null>(null);
   const [listFetched, setListFetched] = useState(false);
+  const [listDebug, setListDebug] = useState<string | null>(null);
   const { addToast } = useToast();
   const router = useRouter();
 
@@ -54,12 +55,14 @@ export function FromGranolaTrigger({ projectId, variant = "button" }: { projectI
   const handleLoadMeetings = async () => {
     if (!selectedListTool) return;
     setListError(null);
+    setListDebug(null);
     setLoadingList(true);
     const result = await listGranolaDocumentsForProject(selectedListTool, searchQuery || undefined);
     setLoadingList(false);
     setListFetched(true);
     if (result.ok) {
       setDocuments(result.documents);
+      setListDebug(result.debug ?? null);
     } else {
       setListError(result.error);
       addToast(result.error, "error");
@@ -151,7 +154,7 @@ export function FromGranolaTrigger({ projectId, variant = "button" }: { projectI
               </label>
               <select
                 value={selectedListTool}
-                onChange={(e) => { setSelectedListTool(e.target.value); setListError(null); setListFetched(false); }}
+                onChange={(e) => { setSelectedListTool(e.target.value); setListError(null); setListDebug(null); setListFetched(false); }}
                 style={{
                   width: "100%",
                   padding: "var(--space-2) var(--space-3)",
@@ -208,9 +211,31 @@ export function FromGranolaTrigger({ projectId, variant = "button" }: { projectI
               </div>
             )}
             {listFetched && documents.length === 0 && !listError && (
-              <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
-                No meetings returned. Try another list tool above.
-              </p>
+              <>
+                <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
+                  No meetings returned. Try another list tool above.
+                </p>
+                {listDebug && (
+                  <div
+                    style={{
+                      padding: "var(--space-3)",
+                      background: "var(--color-surface-elevated)",
+                      borderRadius: "var(--radius-md)",
+                      border: "1px solid var(--color-border)",
+                      fontSize: "var(--text-xs)",
+                      fontFamily: "monospace",
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-all",
+                      color: "var(--color-text-muted)",
+                      maxHeight: 200,
+                      overflow: "auto",
+                    }}
+                  >
+                    <strong style={{ color: "var(--color-text)" }}>Debug (set GRANOLA_DEBUG=1)</strong>
+                    <pre style={{ margin: "var(--space-2) 0 0 0" }}>{listDebug}</pre>
+                  </div>
+                )}
+              </>
             )}
             {listFetched && documents.length > 0 && (
           <form onSubmit={handleImport} style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>

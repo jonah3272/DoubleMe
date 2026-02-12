@@ -60,6 +60,38 @@ export function GranolaSection({ configured, connected }: { configured: boolean;
         </p>
       </div>
 
+      <div
+        style={{
+          padding: "var(--space-3)",
+          background: "var(--color-surface-elevated)",
+          borderRadius: "var(--radius-md)",
+          fontSize: "var(--text-sm)",
+          color: "var(--color-text-muted)",
+          lineHeight: 1.5,
+        }}
+      >
+        <strong style={{ color: "var(--color-text)" }}>Local Granola (proofgeist)</strong>
+        <p style={{ margin: "var(--space-2) 0 0 0" }}>
+          For <strong>100% local</strong> meeting data (macOS Granola cache, no cloud), use{" "}
+          <a
+            href="https://github.com/proofgeist/granola-ai-mcp-server"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: "var(--color-primary)", textDecoration: "none" }}
+          >
+            proofgeist/granola-ai-mcp-server
+          </a>
+          . It exposes <code style={{ fontSize: "0.9em", padding: "0 2px", background: "var(--color-bg-muted)", borderRadius: "var(--radius-sm)" }}>search_meetings</code>,{" "}
+          <code style={{ fontSize: "0.9em", padding: "0 2px", background: "var(--color-bg-muted)", borderRadius: "var(--radius-sm)" }}>get_meeting_transcript</code>, etc. from your local cache. No OAuth.
+        </p>
+        <p style={{ margin: "var(--space-2) 0 0 0", fontWeight: "var(--font-medium)", color: "var(--color-text)" }}>To use it with this app:</p>
+        <ol style={{ margin: "var(--space-2) 0 0 0", paddingLeft: "var(--space-4)" }}>
+          <li>Clone the repo, run <code style={{ fontSize: "0.85em", padding: "0 2px", background: "var(--color-bg-muted)", borderRadius: "var(--radius-sm)" }}>uv sync</code>, and ensure the Granola cache exists (e.g. <code style={{ fontSize: "0.85em", padding: "0 2px", background: "var(--color-bg-muted)", borderRadius: "var(--radius-sm)" }}>~/Library/Application Support/Granola/cache-v3.json</code> on macOS).</li>
+          <li>Run the HTTP bridge: <code style={{ fontSize: "0.85em", padding: "0 2px", background: "var(--color-bg-muted)", borderRadius: "var(--radius-sm)" }}>GRANOLA_MCP_SERVER_CMD=/path/to/granola-ai-mcp-server/.venv/bin/granola-mcp-server node apps/web/scripts/granola-http-bridge.mjs</code></li>
+          <li>Set <code style={{ fontSize: "0.85em", padding: "0 2px", background: "var(--color-bg-muted)", borderRadius: "var(--radius-sm)" }}>GRANOLA_MCP_URL=http://localhost:3333</code> (or your <code style={{ fontSize: "0.85em", padding: "0 2px", background: "var(--color-bg-muted)", borderRadius: "var(--radius-sm)" }}>PORT</code>) in <code style={{ fontSize: "0.85em", padding: "0 2px", background: "var(--color-bg-muted)", borderRadius: "var(--radius-sm)" }}>.env.local</code>. The app will talk to the bridge; no &quot;Connect to Granola&quot; needed for local.</li>
+        </ol>
+      </div>
+
       <div>
         <p style={{ margin: "0 0 var(--space-2) 0", fontSize: "var(--text-sm)", fontWeight: "var(--font-medium)", color: "var(--color-text)" }}>
           Other AI tools — manual connection

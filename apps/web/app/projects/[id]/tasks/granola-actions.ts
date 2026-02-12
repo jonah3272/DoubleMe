@@ -13,7 +13,9 @@ import { getGranolaAccessTokenForUser } from "@/lib/granola-oauth";
 
 export type GranolaDocument = { id: string; title?: string; type?: string; created_at?: string; updated_at?: string };
 
-export type ListGranolaResult = { ok: true; documents: GranolaDocument[] } | { ok: false; error: string };
+export type ListGranolaResult =
+  | { ok: true; documents: GranolaDocument[]; debug?: string }
+  | { ok: false; error: string };
 
 export type GranolaMcpToolsResult =
   | { ok: true; listTools: string[]; defaultListTool: string | null }
@@ -37,8 +39,12 @@ export async function listGranolaDocumentsAction(listTool?: string, searchQuery?
   if (!user) return { ok: false, error: "Not signed in." };
   try {
     const accessToken = await getGranolaAccessTokenForUser(user.id);
-    const documents = await listGranolaDocuments(accessToken ?? undefined, listTool ?? undefined, searchQuery ?? undefined);
-    return { ok: true, documents };
+    const { documents, debug } = await listGranolaDocuments(
+      accessToken ?? undefined,
+      listTool ?? undefined,
+      searchQuery ?? undefined
+    );
+    return { ok: true, documents, debug };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to list Granola documents.";
     return { ok: false, error: message };
