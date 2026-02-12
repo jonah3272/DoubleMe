@@ -272,10 +272,7 @@ export function TasksClient({
     if (!granolaSelectedListTool) return;
     setGranolaListError(null);
     setGranolaLoadingList(true);
-    const result = await listGranolaDocumentsAction(
-      granolaSelectedListTool,
-      granolaSelectedListTool === "search_meetings" ? granolaSearchQuery : undefined
-    );
+    const result = await listGranolaDocumentsAction(granolaSelectedListTool, granolaSearchQuery || undefined);
     setGranolaLoadingList(false);
     setGranolaListFetched(true);
     if (result.ok) setGranolaDocs(result.documents);
@@ -475,18 +472,16 @@ export function TasksClient({
                 ))}
               </select>
             </div>
-            {granolaSelectedListTool === "search_meetings" && (
-              <div>
-                <label style={{ fontSize: "var(--text-sm)", fontWeight: "var(--font-medium)", display: "block", marginBottom: "var(--space-2)" }}>Search query (optional)</label>
-                <input
-                  type="text"
-                  value={granolaSearchQuery}
-                  onChange={(e) => setGranolaSearchQuery(e.target.value)}
-                  placeholder="* or keyword"
-                  style={{ width: "100%", padding: "var(--space-2) var(--space-3)", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", fontSize: "var(--text-sm)", backgroundColor: "var(--color-bg)" }}
-                />
-              </div>
-            )}
+            <div>
+              <label style={{ fontSize: "var(--text-sm)", fontWeight: "var(--font-medium)", display: "block", marginBottom: "var(--space-2)" }}>Search query (optional)</label>
+              <input
+                type="text"
+                value={granolaSearchQuery}
+                onChange={(e) => setGranolaSearchQuery(e.target.value)}
+                placeholder='For search_meetings: * or keyword. Ignored by other tools.'
+                style={{ width: "100%", padding: "var(--space-2) var(--space-3)", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", fontSize: "var(--text-sm)", backgroundColor: "var(--color-bg)" }}
+              />
+            </div>
             <Button type="button" variant="secondary" onClick={handleLoadGranolaMeetings} disabled={granolaLoadingList || !granolaSelectedListTool}>
               {granolaLoadingList ? "Loading…" : "Load meetings"}
             </Button>
