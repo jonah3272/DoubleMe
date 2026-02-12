@@ -26,7 +26,8 @@ type JsonRpcResponse = {
 async function postMessage(url: string, token: string | undefined, message: JsonRpcRequest): Promise<JsonRpcResponse> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    Accept: "application/json",
+    // MCP Streamable HTTP requires both; server may return 406 if only application/json
+    Accept: "application/json, text/event-stream",
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
@@ -40,6 +41,11 @@ async function postMessage(url: string, token: string | undefined, message: Json
     if (res.status === 401) {
       throw new Error(
         "Granola MCP requires sign-in (401). The official server uses OAuth — there is no API key. If you have a bearer token from another tool, set GRANOLA_API_TOKEN in .env.local."
+      );
+    }
+    if (res.status === 406) {
+      throw new Error(
+        "Granola MCP returned 406 Not Acceptable. The app was updated to send the correct Accept header; try again or reconnect in Settings."
       );
     }
     throw new Error(`Granola MCP: ${res.status} ${res.statusText}`);
