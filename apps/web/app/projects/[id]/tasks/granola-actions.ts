@@ -1,6 +1,11 @@
 "use server";
 
-import { listGranolaDocuments, getGranolaTranscriptContent, parseActionItemsFromTranscript } from "@/lib/granola-mcp";
+import {
+  listGranolaDocuments,
+  listGranolaMcpTools,
+  getGranolaTranscriptContent,
+  parseActionItemsFromTranscript,
+} from "@/lib/granola-mcp";
 import { createTasksFromLines } from "./actions";
 import { isValidProjectId } from "@/lib/validators";
 import { getCurrentUser } from "@/lib/supabase/server";
@@ -10,12 +15,29 @@ export type GranolaDocument = { id: string; title?: string; type?: string; creat
 
 export type ListGranolaResult = { ok: true; documents: GranolaDocument[] } | { ok: false; error: string };
 
-export async function listGranolaDocumentsAction(): Promise<ListGranolaResult> {
+export type GranolaMcpToolsResult =
+  | { ok: true; listTools: string[]; defaultListTool: string | null }
+  | { ok: false; error: string };
+
+export async function getGranolaMcpToolsAction(): Promise<GranolaMcpToolsResult> {
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Not signed in." };
   try {
     const accessToken = await getGranolaAccessTokenForUser(user.id);
-    const documents = await listGranolaDocuments(accessToken ?? undefined);
+    const { listTools, defaultListTool } = await listGranolaMcpTools(accessToken ?? undefined);
+    return { ok: true, listTools, defaultListTool };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Failed to list Granola MCP tools.";
+    return { ok: false, error: message };
+  }
+}
+
+export async function listGranolaDocumentsAction(listTool?: string): Promise<ListGranolaResult> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+  try {
+    const accessToken = await getGranolaAccessTokenForUser(user.id);
+    const documents = await listGranolaDocuments(accessToken ?? undefined, listTool ?? undefined);
     return { ok: true, documents };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to list Granola documents.";

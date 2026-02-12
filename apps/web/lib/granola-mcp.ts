@@ -56,21 +56,27 @@ async function postMessage(url: string, token: string | undefined, message: Json
 
   let data: JsonRpcResponse;
   if (contentType.includes("text/event-stream")) {
-    // Server chose SSE: parse "data: {...}" lines (may be multiple lines for one event)
+    // Server may send one or more SSE events; each data: line is usually one JSON-RPC message
     const lines = text.split(/\n/);
-    const dataParts: string[] = [];
+    const requestId = message.id;
+    const validResponses: JsonRpcResponse[] = [];
     for (const line of lines) {
-      if (line.startsWith("data:")) {
-        dataParts.push(line.slice(5).trimStart());
+      if (!line.startsWith("data:")) continue;
+      const jsonStr = line.slice(5).trimStart();
+      if (!jsonStr || jsonStr === "[DONE]" || jsonStr.startsWith("[")) continue;
+      try {
+        const parsed = JSON.parse(jsonStr) as JsonRpcResponse;
+        if (parsed.jsonrpc === "2.0" && (parsed.result !== undefined || parsed.error !== undefined)) {
+          validResponses.push(parsed);
+        }
+      } catch {
+        /* skip malformed line */
       }
     }
-    const jsonStr = dataParts.join("\n");
-    if (!jsonStr) throw new Error("Granola MCP: no data in SSE response");
-    try {
-      data = JSON.parse(jsonStr) as JsonRpcResponse;
-    } catch {
-      throw new Error("Granola MCP: invalid JSON in SSE response");
-    }
+    const matching = validResponses.find((r) => r.id === requestId);
+    const lastValid = matching ?? validResponses[validResponses.length - 1] ?? null;
+    if (!lastValid) throw new Error("Granola MCP: no valid JSON-RPC message in SSE response");
+    data = lastValid;
   } else {
     try {
       data = JSON.parse(text) as JsonRpcResponse;
@@ -107,8 +113,66 @@ export type GranolaDocument = {
   updated_at?: string;
 };
 
+/** Tool names that can list meetings/documents (in preference order). */
+const LIST_TOOL_PRIORITY = [
+  "search_meetings",
+  "list_granola_documents",
+  "list_meetings",
+  "query_granola_meetings",
+  "get_meetings",
+  "search_granola_transcripts",
+];
+
+function pickListTool(toolNames: string[], preferred?: string): string | null {
+  if (preferred && toolNames.includes(preferred)) return preferred;
+  for (const name of LIST_TOOL_PRIORITY) {
+    if (toolNames.includes(name)) return name;
+  }
+  const listLike = toolNames.find(
+    (n) =>
+      n.includes("list") && (n.toLowerCase().includes("granola") || n.toLowerCase().includes("meeting"))
+  );
+  if (listLike) return listLike;
+  const searchGet = toolNames.find(
+    (n) => /search|list|query|get/.test(n) && n.toLowerCase().includes("meeting")
+  );
+  if (searchGet) return searchGet;
+  const anyMeeting = toolNames.find(
+    (n) =>
+      n.toLowerCase().includes("meeting") &&
+      !n.toLowerCase().includes("transcript") &&
+      !n.toLowerCase().includes("document")
+  );
+  return anyMeeting ?? null;
+}
+
+/** Return MCP tool names: all tools and those suitable for listing meetings/documents. */
+export async function listGranolaMcpTools(accessToken?: string): Promise<{
+  allTools: string[];
+  listTools: string[];
+  defaultListTool: string | null;
+}> {
+  const url = getGranolaMcpUrlOptional();
+  if (!url) throw new Error("Granola MCP URL is not set.");
+  const token = accessToken ?? getGranolaApiTokenOptional();
+  await ensureInitialized(url, token);
+  const listRes = await postMessage(url, token, {
+    jsonrpc: "2.0",
+    id: "tools-list",
+    method: "tools/list",
+    params: {},
+  });
+  const tools = (listRes.result as { tools?: { name: string }[] })?.tools ?? [];
+  const allTools = tools.map((t) => t.name);
+  const defaultListTool = pickListTool(allTools);
+  return { allTools, listTools: allTools, defaultListTool };
+}
+
 /** List tools from Granola MCP and call the one that lists documents/transcripts. */
-export async function listGranolaDocuments(accessToken?: string): Promise<GranolaDocument[]> {
+export async function listGranolaDocuments(
+  accessToken?: string,
+  preferredListTool?: string
+): Promise<GranolaDocument[]> {
   const url = getGranolaMcpUrlOptional();
   if (!url) throw new Error("Granola MCP URL is not set.");
   const token = accessToken ?? getGranolaApiTokenOptional();
@@ -125,24 +189,20 @@ export async function listGranolaDocuments(accessToken?: string): Promise<Granol
   const tools = (listRes.result as { tools?: { name: string }[] })?.tools ?? [];
   const toolNames = tools.map((t) => t.name);
 
-  // Prefer tools that list/search documents, transcripts, or meetings (official + community naming)
-  const listTool =
-    toolNames.find((n) => n === "search_meetings") ??
-    toolNames.find((n) => n === "list_granola_documents") ??
-    toolNames.find((n) => n === "list_meetings") ??
-    toolNames.find((n) => n === "query_granola_meetings") ??
-    toolNames.find((n) => n === "search_granola_transcripts") ??
-    toolNames.find((n) => n.includes("list") && (n.toLowerCase().includes("granola") || n.toLowerCase().includes("meeting")));
+  const listTool = pickListTool(toolNames, preferredListTool ?? undefined);
 
   if (!listTool) {
-    throw new Error("Granola MCP does not expose a list documents/transcripts tool. Available: " + toolNames.join(", ") || "none");
+    throw new Error("Granola MCP does not expose a list documents/transcripts tool. Available: " + (toolNames.length ? toolNames.join(", ") : "none"));
   }
 
-  // search_meetings: query (string), limit (optional, default 10); empty query = broad search
+  // search_meetings: query, limit; list_meetings / list_granola_documents / get_meetings / query_granola_meetings: limit or {}
   const listArgs =
     listTool === "search_meetings"
       ? { query: "", limit: 100 }
-      : listTool === "list_granola_documents"
+      : listTool === "list_granola_documents" ||
+          listTool === "get_meetings" ||
+          listTool === "query_granola_meetings" ||
+          listTool === "list_meetings"
         ? { limit: 100 }
         : {};
   const callRes = await postMessage(url, token, {

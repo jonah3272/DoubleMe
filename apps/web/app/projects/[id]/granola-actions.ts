@@ -1,6 +1,11 @@
 "use server";
 
-import { listGranolaDocuments, getGranolaTranscriptFull, parseActionItemsFromTranscript } from "@/lib/granola-mcp";
+import {
+  listGranolaDocuments,
+  listGranolaMcpTools,
+  getGranolaTranscriptFull,
+  parseActionItemsFromTranscript,
+} from "@/lib/granola-mcp";
 import { createTasksFromLines } from "./tasks/actions";
 import { createArtifact } from "./artifacts/actions";
 import { isValidProjectId } from "@/lib/validators";
@@ -71,12 +76,30 @@ export async function getGranolaConnected(): Promise<GranolaConnectedResult> {
   }
 }
 
-export async function listGranolaDocumentsForProject(): Promise<ListGranolaResult> {
+export type GranolaMcpToolsResult =
+  | { ok: true; listTools: string[]; defaultListTool: string | null }
+  | { ok: false; error: string };
+
+/** List MCP tools so the user can choose which tool to use for listing meetings. */
+export async function getGranolaMcpToolsForProject(): Promise<GranolaMcpToolsResult> {
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Not signed in." };
   try {
     const accessToken = await getGranolaAccessTokenForUser(user.id);
-    const documents = await listGranolaDocuments(accessToken ?? undefined);
+    const { listTools, defaultListTool } = await listGranolaMcpTools(accessToken ?? undefined);
+    return { ok: true, listTools, defaultListTool };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Failed to list Granola MCP tools.";
+    return { ok: false, error: message };
+  }
+}
+
+export async function listGranolaDocumentsForProject(listTool?: string): Promise<ListGranolaResult> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+  try {
+    const accessToken = await getGranolaAccessTokenForUser(user.id);
+    const documents = await listGranolaDocuments(accessToken ?? undefined, listTool ?? undefined);
     return { ok: true, documents };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to list Granola documents.";

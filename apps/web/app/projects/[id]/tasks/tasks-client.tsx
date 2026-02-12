@@ -17,7 +17,12 @@ import {
   useToast,
 } from "@/components/ui";
 import { createTask, updateTask, deleteTask, createTasksFromLines, type TaskStatus } from "./actions";
-import { listGranolaDocumentsAction, importTasksFromGranolaDocument, type GranolaDocument } from "./granola-actions";
+import {
+  getGranolaMcpToolsAction,
+  listGranolaDocumentsAction,
+  importTasksFromGranolaDocument,
+  type GranolaDocument,
+} from "./granola-actions";
 
 export type TaskRow = {
   id: string;
@@ -55,7 +60,12 @@ export function TasksClient({
   const [granolaOpen, setGranolaOpen] = useState(false);
   const [granolaDocs, setGranolaDocs] = useState<GranolaDocument[]>([]);
   const [granolaListError, setGranolaListError] = useState<string | null>(null);
-  const [granolaLoading, setGranolaLoading] = useState(false);
+  const [granolaLoadingTools, setGranolaLoadingTools] = useState(false);
+  const [granolaLoadingList, setGranolaLoadingList] = useState(false);
+  const [granolaToolsError, setGranolaToolsError] = useState<string | null>(null);
+  const [granolaListTools, setGranolaListTools] = useState<string[]>([]);
+  const [granolaSelectedListTool, setGranolaSelectedListTool] = useState("");
+  const [granolaListFetched, setGranolaListFetched] = useState(false);
   const [granolaSelectedId, setGranolaSelectedId] = useState("");
   const [granolaDue, setGranolaDue] = useState<"today" | "week">("week");
   const [editOpen, setEditOpen] = useState(false);
@@ -241,9 +251,29 @@ export function TasksClient({
     setGranolaDocs([]);
     setGranolaListError(null);
     setGranolaSelectedId("");
-    setGranolaLoading(true);
-    const result = await listGranolaDocumentsAction();
-    setGranolaLoading(false);
+    setGranolaListFetched(false);
+    setGranolaToolsError(null);
+    setGranolaLoadingTools(true);
+    const toolsResult = await getGranolaMcpToolsAction();
+    setGranolaLoadingTools(false);
+    if (toolsResult.ok) {
+      setGranolaListTools(toolsResult.listTools);
+      setGranolaSelectedListTool(toolsResult.defaultListTool ?? toolsResult.listTools[0] ?? "");
+    } else {
+      setGranolaToolsError(toolsResult.error);
+      setGranolaListTools([]);
+      setGranolaSelectedListTool("");
+      addToast(toolsResult.error, "error");
+    }
+  };
+
+  const handleLoadGranolaMeetings = async () => {
+    if (!granolaSelectedListTool) return;
+    setGranolaListError(null);
+    setGranolaLoadingList(true);
+    const result = await listGranolaDocumentsAction(granolaSelectedListTool);
+    setGranolaLoadingList(false);
+    setGranolaListFetched(true);
     if (result.ok) setGranolaDocs(result.documents);
     else {
       setGranolaListError(result.error);
@@ -402,9 +432,9 @@ export function TasksClient({
         <p style={{ margin: "0 0 var(--space-3) 0", fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
           Choose a transcript to import action items as tasks. Due date applies to all imported tasks.
         </p>
-        {granolaLoading ? (
-          <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>Loading documents…</p>
-        ) : granolaListError ? (
+        {granolaLoadingTools ? (
+          <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>Connecting to Granola…</p>
+        ) : granolaToolsError ? (
           <div
             style={{
               padding: "var(--space-3)",
@@ -414,17 +444,45 @@ export function TasksClient({
             }}
           >
             <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-error, #b91c1c)", fontWeight: "var(--font-medium)" }}>
-              {granolaListError}
+              {granolaToolsError}
             </p>
             <p style={{ margin: "var(--space-2) 0 0 0", fontSize: "var(--text-xs)", color: "var(--color-text-muted)", lineHeight: 1.4 }}>
               See Settings → Granola MCP for OAuth details. To use a bearer token, add GRANOLA_API_TOKEN to .env.local and restart.
             </p>
           </div>
-        ) : granolaDocs.length === 0 ? (
-          <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
-            No documents found. Configure GRANOLA_MCP_URL in Settings (and .env.local).
-          </p>
-        ) : (
+        ) : granolaListTools.length > 0 ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+            <div>
+              <label style={{ fontSize: "var(--text-sm)", fontWeight: "var(--font-medium)", display: "block", marginBottom: "var(--space-2)" }}>List tool</label>
+              <select
+                value={granolaSelectedListTool}
+                onChange={(e) => { setGranolaSelectedListTool(e.target.value); setGranolaListError(null); setGranolaListFetched(false); }}
+                style={{
+                  width: "100%",
+                  padding: "var(--space-2) var(--space-3)",
+                  borderRadius: "var(--radius-md)",
+                  border: "1px solid var(--color-border)",
+                  fontSize: "var(--text-sm)",
+                  backgroundColor: "var(--color-bg)",
+                }}
+              >
+                {granolaListTools.map((name) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+            </div>
+            <Button type="button" variant="secondary" onClick={handleLoadGranolaMeetings} disabled={granolaLoadingList || !granolaSelectedListTool}>
+              {granolaLoadingList ? "Loading…" : "Load meetings"}
+            </Button>
+            {granolaListError && (
+              <div style={{ padding: "var(--space-3)", background: "var(--color-error-subtle, rgba(185, 28, 28, 0.08))", borderRadius: "var(--radius-md)", border: "1px solid var(--color-error-border, rgba(185, 28, 28, 0.3))" }}>
+                <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-error, #b91c1c)", fontWeight: "var(--font-medium)" }}>{granolaListError}</p>
+              </div>
+            )}
+            {granolaListFetched && granolaDocs.length === 0 && !granolaListError && (
+              <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>No meetings returned. Try another list tool above.</p>
+            )}
+            {granolaListFetched && granolaDocs.length > 0 && (
           <form onSubmit={handleImportFromGranola} style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
             <div>
               <label style={{ fontSize: "var(--text-sm)", fontWeight: "var(--font-medium)", display: "block", marginBottom: "var(--space-2)" }}>Transcript</label>
@@ -475,6 +533,10 @@ export function TasksClient({
               </Button>
             </div>
           </form>
+            )}
+          </div>
+        ) : (
+          <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>No MCP tools available. Check Settings → Granola MCP.</p>
         )}
       </Dialog>
 
