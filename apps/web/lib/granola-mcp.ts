@@ -125,17 +125,26 @@ export async function listGranolaDocuments(accessToken?: string): Promise<Granol
   const tools = (listRes.result as { tools?: { name: string }[] })?.tools ?? [];
   const toolNames = tools.map((t) => t.name);
 
-  // Prefer tools that list documents or transcripts (Granola community/official naming)
+  // Prefer tools that list/search documents, transcripts, or meetings (official + community naming)
   const listTool =
+    toolNames.find((n) => n === "search_meetings") ??
     toolNames.find((n) => n === "list_granola_documents") ??
+    toolNames.find((n) => n === "list_meetings") ??
+    toolNames.find((n) => n === "query_granola_meetings") ??
     toolNames.find((n) => n === "search_granola_transcripts") ??
-    toolNames.find((n) => n.includes("list") && n.toLowerCase().includes("granola"));
+    toolNames.find((n) => n.includes("list") && (n.toLowerCase().includes("granola") || n.toLowerCase().includes("meeting")));
 
   if (!listTool) {
     throw new Error("Granola MCP does not expose a list documents/transcripts tool. Available: " + toolNames.join(", ") || "none");
   }
 
-  const listArgs = listTool === "list_granola_documents" ? { limit: 100 } : {};
+  // search_meetings: query (string), limit (optional, default 10); empty query = broad search
+  const listArgs =
+    listTool === "search_meetings"
+      ? { query: "", limit: 100 }
+      : listTool === "list_granola_documents"
+        ? { limit: 100 }
+        : {};
   const callRes = await postMessage(url, token, {
     jsonrpc: "2.0",
     id: "tools-call-list",
@@ -150,15 +159,34 @@ export async function listGranolaDocuments(accessToken?: string): Promise<Granol
   if (!content?.length || content[0].type !== "text") return [];
   const text = content[0].text ?? "";
   try {
-    // Granola MCP returns { count, documents: [{ id, title, created_at, updated_at }] } for list_granola_documents
-    const parsed = JSON.parse(text) as GranolaDocument[] | { documents?: GranolaDocument[]; transcripts?: GranolaDocument[] };
-    if (Array.isArray(parsed)) return parsed;
-    if (parsed.documents?.length) return parsed.documents;
-    if (parsed.transcripts?.length) return parsed.transcripts;
-    return [];
+    // search_meetings: { meetings? } or { results? }; list_granola_documents: { documents }; etc.
+    const parsed = JSON.parse(text) as
+      | Record<string, unknown>[]
+      | {
+          documents?: Record<string, unknown>[];
+          transcripts?: Record<string, unknown>[];
+          meetings?: Record<string, unknown>[];
+          results?: Record<string, unknown>[];
+        };
+    const raw: Record<string, unknown>[] = Array.isArray(parsed)
+      ? parsed
+      : parsed.documents ?? parsed.transcripts ?? parsed.meetings ?? parsed.results ?? [];
+    return raw.map(normalizeGranolaDocument);
   } catch {
     return [];
   }
+}
+
+function normalizeGranolaDocument(item: Record<string, unknown>): GranolaDocument {
+  const id = String(item.id ?? item.meeting_id ?? item.document_id ?? "");
+  const title = [item.title, item.name, item.subject].find((t) => t != null) as string | undefined;
+  return {
+    id,
+    title: title != null ? String(title) : undefined,
+    type: item.type != null ? String(item.type) : undefined,
+    created_at: item.created_at != null ? String(item.created_at) : undefined,
+    updated_at: item.updated_at != null ? String(item.updated_at) : undefined,
+  };
 }
 
 export type GranolaTranscriptFull = { title: string; content: string; created_at?: string; updated_at?: string };
@@ -180,10 +208,16 @@ export async function getGranolaTranscriptFull(documentId: string, accessToken?:
   const tools = (listRes.result as { tools?: { name: string }[] })?.tools ?? [];
   const getTool =
     tools.find((t) => t.name === "get_granola_transcript") ??
+    tools.find((t) => t.name === "get_meeting_transcript") ??
     tools.find((t) => t.name === "get_granola_document") ??
-    tools.find((t) => t.name.includes("get") && t.name.toLowerCase().includes("granola"));
+    tools.find((t) => t.name.includes("get") && (t.name.toLowerCase().includes("granola") || t.name.toLowerCase().includes("meeting") && t.name.toLowerCase().includes("transcript")));
 
   if (!getTool) throw new Error("Granola MCP does not expose get transcript/document tool.");
+
+  // get_meeting_transcript may use meeting_id or id
+  const getArgs = getTool.name === "get_meeting_transcript"
+    ? { meeting_id: documentId }
+    : { id: documentId };
 
   const callRes = await postMessage(url, token, {
     jsonrpc: "2.0",
@@ -191,7 +225,7 @@ export async function getGranolaTranscriptFull(documentId: string, accessToken?:
     method: "tools/call",
     params: {
       name: getTool.name,
-      arguments: { id: documentId },
+      arguments: getArgs,
     },
   });
 
