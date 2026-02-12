@@ -39,11 +39,12 @@ function computeCodeChallenge(verifier: string): string {
   return base64UrlEncode(createHash("sha256").update(verifier, "utf8").digest());
 }
 
-/** Get or create OAuth client via DCR. Returns { client_id, client_secret } (secret may be null for public clients). */
+/** Get or create OAuth client via DCR. Returns { client_id, client_secret }. Re-registers if redirect_uri changed (e.g. after fixing app URL). */
 async function getOrRegisterClient(redirectUri: string): Promise<{ client_id: string; client_secret: string | null }> {
   const supabase = createServiceRoleClient();
-  const { data: row } = await supabase.from("granola_oauth_client").select("client_id, client_secret").single();
-  if (row?.client_id) return { client_id: row.client_id, client_secret: row.client_secret ?? null };
+  const { data: row } = await supabase.from("granola_oauth_client").select("client_id, client_secret, redirect_uri").single();
+  if (row?.client_id && row.redirect_uri === redirectUri) return { client_id: row.client_id, client_secret: row.client_secret ?? null };
+  if (row?.client_id) await supabase.from("granola_oauth_client").update({ client_id: null, client_secret: null, redirect_uri: null, updated_at: new Date().toISOString() }).eq("id", 1);
 
   const meta = await getMetadata();
   const regRes = await fetch(meta.registration_endpoint, {
@@ -66,7 +67,7 @@ async function getOrRegisterClient(redirectUri: string): Promise<{ client_id: st
   }
   const reg = (await regRes.json()) as { client_id: string; client_secret?: string };
   await supabase.from("granola_oauth_client").upsert(
-    { id: 1, client_id: reg.client_id, client_secret: reg.client_secret ?? null, updated_at: new Date().toISOString() },
+    { id: 1, client_id: reg.client_id, client_secret: reg.client_secret ?? null, redirect_uri: redirectUri, updated_at: new Date().toISOString() },
     { onConflict: "id" }
   );
   return { client_id: reg.client_id, client_secret: reg.client_secret ?? null };
@@ -178,4 +179,16 @@ export async function getGranolaAccessTokenForUser(userId: string): Promise<stri
     return null;
   }
   return data.access_token;
+}
+
+/** Reset Granola OAuth so the next "Connect to Granola" runs as if first time: clear stored client (forces new DCR) and this user's token. */
+export async function resetGranolaConnection(userId: string): Promise<void> {
+  const supabase = createServiceRoleClient();
+  await supabase.from("granola_oauth_client").update({
+    client_id: null,
+    client_secret: null,
+    redirect_uri: null,
+    updated_at: new Date().toISOString(),
+  }).eq("id", 1);
+  await supabase.from("granola_tokens").delete().eq("user_id", userId);
 }

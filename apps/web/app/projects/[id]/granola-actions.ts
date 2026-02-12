@@ -10,6 +10,7 @@ import {
   buildGranolaAuthorizeUrl,
   storeGranolaPending,
   getGranolaAccessTokenForUser,
+  resetGranolaConnection,
 } from "@/lib/granola-oauth";
 import { getAppOriginOptional } from "@/lib/env";
 import { randomBytes } from "crypto";
@@ -44,6 +45,19 @@ export async function getGranolaConnectUrl(): Promise<GranolaConnectUrlResult> {
 }
 
 export type GranolaConnectedResult = { ok: true; connected: boolean } | { ok: false; error: string };
+
+/** Reset Granola OAuth so the next Connect runs as if first time (clears stored client + your token). */
+export async function resetGranolaConnectionAction(): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+  try {
+    await resetGranolaConnection(user.id);
+    return { ok: true };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Reset failed.";
+    return { ok: false, error: message };
+  }
+}
 
 /** Check if the current user has connected their Granola account (OAuth). */
 export async function getGranolaConnected(): Promise<GranolaConnectedResult> {

@@ -61,12 +61,19 @@ export function getGranolaApiTokenOptional(): string | undefined {
   return process.env.GRANOLA_API_TOKEN?.trim() || undefined;
 }
 
-/** App origin for OAuth redirect_uri (e.g. https://app.example.com). Optional. */
+/** App origin for OAuth redirect_uri (e.g. https://app.example.com). Optional. Always returns scheme + host only, no path. */
 export function getAppOriginOptional(): string | undefined {
-  const url = process.env.NEXT_PUBLIC_APP_URL?.trim() || process.env.VERCEL_URL;
-  if (url) {
-    const origin = url.startsWith("http") ? url : `https://${url}`;
-    return origin.replace(/\/$/, "");
+  let url = (process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL || "").trim();
+  if (!url) return undefined;
+  // Fix common typo: "https//" -> "https://"
+  if (url.startsWith("https//")) url = "https://" + url.slice(7);
+  else if (url.startsWith("http//")) url = "http://" + url.slice(6);
+  if (!url.startsWith("http://") && !url.startsWith("https://")) url = "https://" + url;
+  try {
+    const parsed = new URL(url);
+    // Origin = scheme + host only (no path, so we never double-append /api/auth/granola/callback)
+    return `${parsed.protocol}//${parsed.host}`;
+  } catch {
+    return undefined;
   }
-  return undefined;
 }
