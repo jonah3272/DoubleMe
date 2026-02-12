@@ -36,6 +36,7 @@ export function DashboardActivityFeed({
         ? feedItems.filter((i) => i.type === "thread")
         : feedItems.filter((i) => i.type === "artifact");
 
+  const typeLabel = (item: FeedItem) => (item.type === "thread" ? "Conversation" : "Note");
   const tabStyle = (active: boolean) => ({
     padding: "var(--space-2) var(--space-3)",
     fontSize: "var(--text-sm)",
@@ -50,6 +51,9 @@ export function DashboardActivityFeed({
 
   return (
     <div style={{ minWidth: 0 }}>
+      <p style={{ margin: "0 0 var(--space-3) 0", fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
+        Recent conversations and saved notes.
+      </p>
       <div
         style={{
           display: "flex",
@@ -73,20 +77,20 @@ export function DashboardActivityFeed({
           Activity
         </h2>
         <div style={{ display: "flex", gap: 0 }}>
-          <button type="button" style={tabStyle(tab === "all")} onClick={() => setTab("all")}>
+          <button type="button" className="dashboard-activity-tab" style={tabStyle(tab === "all")} onClick={() => setTab("all")}>
             All
           </button>
-          <button type="button" style={tabStyle(tab === "threads")} onClick={() => setTab("threads")}>
-            Threads
+          <button type="button" className="dashboard-activity-tab" style={tabStyle(tab === "threads")} onClick={() => setTab("threads")}>
+            Conversations
           </button>
-          <button type="button" style={tabStyle(tab === "artifacts")} onClick={() => setTab("artifacts")}>
-            Artifacts
+          <button type="button" className="dashboard-activity-tab" style={tabStyle(tab === "artifacts")} onClick={() => setTab("artifacts")}>
+            Notes
           </button>
         </div>
       </div>
       {filtered.length === 0 ? (
         <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
-          {tab === "all" ? "No threads or artifacts yet." : `No ${tab} yet.`}
+          {tab === "all" ? "No conversations or notes yet." : tab === "threads" ? "No conversations yet." : "No notes yet."}
         </p>
       ) : (
         <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
@@ -114,20 +118,16 @@ export function DashboardActivityFeed({
                 <span
                   style={{
                     flexShrink: 0,
-                    width: 28,
-                    height: 28,
+                    padding: "2px 8px",
                     borderRadius: "var(--radius-md)",
                     backgroundColor:
                       item.type === "thread" ? "var(--color-primary-muted)" : "var(--color-bg-muted)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
                     fontSize: "var(--text-xs)",
-                    fontWeight: "var(--font-semibold)",
+                    fontWeight: "var(--font-medium)",
                     color: item.type === "thread" ? "var(--color-primary)" : "var(--color-text-muted)",
                   }}
                 >
-                  {item.type === "thread" ? "T" : "A"}
+                  {typeLabel(item)}
                 </span>
                 <span
                   style={{
@@ -157,10 +157,10 @@ export function DashboardActivityFeed({
             href={`/projects/${projectId}/threads`}
             style={{ color: "var(--color-primary)", textDecoration: "none", marginRight: "var(--space-3)" }}
           >
-            Threads
+            All conversations
           </Link>
           <Link href={`/projects/${projectId}/artifacts`} style={{ color: "var(--color-primary)", textDecoration: "none" }}>
-            Artifacts
+            All notes
           </Link>
         </p>
       )}

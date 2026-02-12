@@ -10,7 +10,15 @@ import {
   type GranolaDocument,
 } from "./granola-actions";
 
-export function FromGranolaTrigger({ projectId, variant = "button" }: { projectId: string; variant?: "button" | "link" }) {
+export function FromGranolaTrigger({
+  projectId,
+  variant = "button",
+  className,
+}: {
+  projectId: string;
+  variant?: "button" | "link";
+  className?: string;
+}) {
   const [open, setOpen] = useState(false);
   const [documents, setDocuments] = useState<GranolaDocument[]>([]);
   const [loadingTools, setLoadingTools] = useState(false);
@@ -101,6 +109,7 @@ export function FromGranolaTrigger({ projectId, variant = "button" }: { projectI
         <button
           type="button"
           onClick={handleOpen}
+          className={className}
           style={{
             fontSize: "var(--text-sm)",
             color: "var(--color-text-muted)",
@@ -111,6 +120,10 @@ export function FromGranolaTrigger({ projectId, variant = "button" }: { projectI
             cursor: "pointer",
             textAlign: "left",
             font: "inherit",
+            flex: 1,
+            display: "flex",
+            alignItems: "center",
+            gap: "var(--space-3)",
           }}
         >
           From Granola →

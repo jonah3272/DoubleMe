@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui";
-import { FromGranolaTrigger } from "./from-granola-trigger";
 import { DashboardActivityFeed } from "./dashboard-activity-feed";
 
 const CHATGPT_URL = "https://chat.openai.com";
@@ -166,6 +165,7 @@ export function ProjectDashboard({
         <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)" }}>
           <Link
             href={`/projects/${projectId}/threads`}
+            className="dashboard-cta-primary"
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -203,137 +203,43 @@ export function ProjectDashboard({
           >
             View tasks
           </Link>
-          <span style={{ display: "inline-flex", alignItems: "center" }}>
-            <FromGranolaTrigger projectId={projectId} />
-          </span>
         </div>
       </div>
 
-      {/* Metrics strip – at a glance (Vercel/Stripe style) */}
+      {/* One-line summary: what each thing is + counts (no redundant cards) */}
       <div
-        data-dashboard-metrics
+        className="dashboard-metrics-inner"
         style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
-          gap: "var(--space-3)",
+          padding: "var(--space-3) var(--space-4)",
+          background: "var(--color-bg-elevated)",
+          border: "1px solid var(--color-border)",
+          borderRadius: "var(--radius-lg)",
         }}
       >
-        <Link
-          href={`/projects/${projectId}/tasks`}
-          style={{
-            display: "block",
-            padding: "var(--space-4)",
-            background: "var(--color-bg-elevated)",
-            border: "1px solid var(--color-border)",
-            borderRadius: "var(--radius-lg)",
-            textDecoration: "none",
-            color: "inherit",
-          }}
-        >
-          <span style={{ fontSize: "var(--text-2xl)", fontWeight: "var(--font-bold)", color: "var(--color-text)" }}>
-            {tasksCount}
-          </span>
-          <span style={{ display: "block", fontSize: "var(--text-sm)", color: "var(--color-text-muted)", marginTop: "var(--space-1)" }}>
-            Tasks
-          </span>
-        </Link>
-        <Link
-          href={`/projects/${projectId}/threads`}
-          style={{
-            display: "block",
-            padding: "var(--space-4)",
-            background: "var(--color-bg-elevated)",
-            border: "1px solid var(--color-border)",
-            borderRadius: "var(--radius-lg)",
-            textDecoration: "none",
-            color: "inherit",
-          }}
-        >
-          <span style={{ fontSize: "var(--text-2xl)", fontWeight: "var(--font-bold)", color: "var(--color-text)" }}>
-            {conversationsCount}
-          </span>
-          <span style={{ display: "block", fontSize: "var(--text-sm)", color: "var(--color-text-muted)", marginTop: "var(--space-1)" }}>
-            Threads
-          </span>
-        </Link>
-        <Link
-          href={`/projects/${projectId}/artifacts`}
-          style={{
-            display: "block",
-            padding: "var(--space-4)",
-            background: "var(--color-bg-elevated)",
-            border: "1px solid var(--color-border)",
-            borderRadius: "var(--radius-lg)",
-            textDecoration: "none",
-            color: "inherit",
-          }}
-        >
-          <span style={{ fontSize: "var(--text-2xl)", fontWeight: "var(--font-bold)", color: "var(--color-text)" }}>
-            {artifactsCount}
-          </span>
-          <span style={{ display: "block", fontSize: "var(--text-sm)", color: "var(--color-text-muted)", marginTop: "var(--space-1)" }}>
-            Artifacts
-          </span>
-        </Link>
-        {upcomingEvents.length > 0 && upcomingEvents[0].link ? (
-          <a
-            href={upcomingEvents[0].link}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              display: "block",
-              padding: "var(--space-4)",
-              background: "var(--color-bg-elevated)",
-              border: "1px solid var(--color-border)",
-              borderRadius: "var(--radius-lg)",
-              textDecoration: "none",
-              color: "inherit",
-            }}
-          >
-            <span
-              style={{
-                fontSize: "var(--text-sm)",
-                fontWeight: "var(--font-semibold)",
-                color: "var(--color-text)",
-                display: "block",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {nextEventLabel}
-            </span>
-            <span style={{ display: "block", fontSize: "var(--text-xs)", color: "var(--color-text-muted)", marginTop: "var(--space-1)" }}>
-              Next event
-            </span>
-          </a>
-        ) : (
-          <div
-            style={{
-              padding: "var(--space-4)",
-              background: "var(--color-bg-elevated)",
-              border: "1px solid var(--color-border)",
-              borderRadius: "var(--radius-lg)",
-            }}
-          >
-            <span
-              style={{
-                fontSize: "var(--text-sm)",
-                fontWeight: "var(--font-semibold)",
-                color: "var(--color-text)",
-                display: "block",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {nextEventLabel ?? "No upcoming events"}
-            </span>
-            <span style={{ display: "block", fontSize: "var(--text-xs)", color: "var(--color-text-muted)", marginTop: "var(--space-1)" }}>
-              Next event
-            </span>
-          </div>
-        )}
+        <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)", lineHeight: 1.5 }}>
+          <strong style={{ color: "var(--color-text)" }}>Tasks</strong> = to-dos.{" "}
+          <strong style={{ color: "var(--color-text)" }}>Threads</strong> = conversations &amp; decisions.{" "}
+          <strong style={{ color: "var(--color-text)" }}>Notes</strong> = meeting notes &amp; docs.
+        </p>
+        <p style={{ margin: "var(--space-2) 0 0 0", fontSize: "var(--text-sm)" }}>
+          <Link href={`/projects/${projectId}/tasks`} style={{ color: "var(--color-accent)", fontWeight: "var(--font-semibold)", textDecoration: "none" }}>
+            {tasksCount} tasks
+          </Link>
+          {" · "}
+          <Link href={`/projects/${projectId}/threads`} style={{ color: "var(--color-accent)", fontWeight: "var(--font-semibold)", textDecoration: "none" }}>
+            {conversationsCount} threads
+          </Link>
+          {" · "}
+          <Link href={`/projects/${projectId}/artifacts`} style={{ color: "var(--color-accent)", fontWeight: "var(--font-semibold)", textDecoration: "none" }}>
+            {artifactsCount} notes
+          </Link>
+          {nextEventLabel && (
+            <>
+              {" · "}
+              <span style={{ color: "var(--color-text-muted)" }}>Next: {nextEventLabel}</span>
+            </>
+          )}
+        </p>
       </div>
 
       {/* Main: feed + sidebar */}
@@ -371,7 +277,7 @@ export function ProjectDashboard({
                     textAlign: "center",
                   }}
                 >
-                  No threads or artifacts yet. Start a thread to capture decisions and context.
+                  No conversations or notes yet. Start a thread to capture decisions and context.
                 </p>
                 <div style={{ marginTop: "var(--space-4)", display: "flex", justifyContent: "center" }}>
                   <Link
@@ -393,7 +299,7 @@ export function ProjectDashboard({
           <DashboardActivityFeed projectId={projectId} feedItems={feedItems} />
         )}
 
-        {/* Sidebar: Up next, Upcoming, quick links */}
+        {/* Right column: Focus (tasks + events) + quick links */}
         <aside
           data-dashboard-sidebar
           style={{
@@ -404,8 +310,21 @@ export function ProjectDashboard({
             top: "var(--space-8)",
           }}
         >
-          {/* Up next – tasks (Linear/Asana: Today / This week) */}
-          <div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
+            <h2
+              style={{
+                margin: 0,
+                fontSize: "var(--text-sm)",
+                fontWeight: "var(--font-semibold)",
+                color: "var(--color-text-muted)",
+                letterSpacing: "0.02em",
+                textTransform: "uppercase",
+              }}
+            >
+              Focus
+            </h2>
+            {/* Up next – tasks (Today / This week) */}
+            <div>
             <h3
               style={{
                 margin: "0 0 var(--space-3) 0",
@@ -464,7 +383,7 @@ export function ProjectDashboard({
                                 padding: "2px 6px",
                                 borderRadius: "var(--radius-sm)",
                                 background: "var(--color-primary-muted)",
-                                color: "var(--color-primary)",
+                                color: "var(--color-accent)",
                                 fontWeight: "var(--font-medium)",
                               }}
                             >
@@ -533,8 +452,8 @@ export function ProjectDashboard({
             </Link>
           </div>
 
-          {/* Upcoming – calendar */}
-          <div>
+            {/* Upcoming – calendar events */}
+            <div>
             <h3
               style={{
                 margin: "0 0 var(--space-3) 0",
@@ -579,9 +498,10 @@ export function ProjectDashboard({
                 ))}
               </ul>
             )}
+            </div>
           </div>
 
-          {/* Quick links – compact */}
+          {/* Quick links – compact (Granola lives in sidebar only) */}
           <div
             style={{
               display: "flex",
@@ -591,7 +511,6 @@ export function ProjectDashboard({
               borderTop: "1px solid var(--color-border-subtle)",
             }}
           >
-            <FromGranolaTrigger projectId={projectId} variant="link" />
             <Link
               href={`/projects/${projectId}/settings#teammates`}
               style={{ fontSize: "var(--text-sm)", color: "var(--color-text-muted)", textDecoration: "none" }}
@@ -616,7 +535,7 @@ export function ProjectDashboard({
         </aside>
       </div>
 
-      {/* Responsive: stack on narrow; metrics 2-col on small */}
+      {/* Responsive: stack on narrow */}
       <style>{`
         @media (max-width: 768px) {
           [data-dashboard-grid] {
@@ -625,14 +544,6 @@ export function ProjectDashboard({
           [data-dashboard-sidebar] {
             position: static !important;
           }
-        }
-        @media (max-width: 480px) {
-          [data-dashboard-metrics] {
-            grid-template-columns: repeat(2, 1fr) !important;
-          }
-        }
-        .feed-row:hover {
-          background: var(--color-bg-muted);
         }
       `}</style>
     </div>
