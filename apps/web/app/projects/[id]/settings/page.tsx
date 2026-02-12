@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isValidProjectId } from "@/lib/validators";
 import { getGranolaMcpUrlOptional } from "@/lib/env";
+import { getGranolaConnected } from "../granola-actions";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { ProjectSidebar } from "../project-sidebar";
@@ -52,6 +53,14 @@ export default async function ProjectSettingsPage({
   }));
   const initialFigmaLinks = (figmaLinks ?? []).map((l) => ({ id: l.id, url: l.url, name: l.name }));
 
+  let granolaConnected = false;
+  try {
+    const granolaResult = await getGranolaConnected();
+    granolaConnected = granolaResult.ok && granolaResult.connected;
+  } catch {
+    // Supabase or service role not configured
+  }
+
   return (
     <AppShell sidebar={<ProjectSidebar projectId={id} projectName={project.name} />}>
       <PageHeader title="Settings" description={`Tools and integrations for ${project.name}`} />
@@ -62,7 +71,7 @@ export default async function ProjectSettingsPage({
         <div id="tools">
           <ProjectTools projectId={id} enabledAgentKeys={enabledAgentKeys} />
         </div>
-        <GranolaSection configured={!!getGranolaMcpUrlOptional()} />
+        <GranolaSection configured={!!getGranolaMcpUrlOptional()} connected={granolaConnected} />
         <TeammatesSection projectId={id} initialContacts={initialContacts} />
         <CalendarSection projectId={id} initialEvents={initialEvents} />
         <FigmaSection projectId={id} initialLinks={initialFigmaLinks} />

@@ -6,16 +6,63 @@ import { createArtifact } from "./artifacts/actions";
 import { isValidProjectId } from "@/lib/validators";
 import { getCurrentUser } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import {
+  buildGranolaAuthorizeUrl,
+  storeGranolaPending,
+  getGranolaAccessTokenForUser,
+} from "@/lib/granola-oauth";
+import { getAppOriginOptional } from "@/lib/env";
+import { randomBytes } from "crypto";
 
 export type GranolaDocument = { id: string; title?: string; type?: string; created_at?: string; updated_at?: string };
 
 export type ListGranolaResult = { ok: true; documents: GranolaDocument[] } | { ok: false; error: string };
 
+function base64UrlEncode(buf: Buffer): string {
+  return buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+export type GranolaConnectUrlResult = { ok: true; url: string } | { ok: false; error: string };
+
+/** Get the OAuth URL to send the user to for "Connect to Granola" (like Claude). */
+export async function getGranolaConnectUrl(): Promise<GranolaConnectUrlResult> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+  const origin = getAppOriginOptional();
+  if (!origin) return { ok: false, error: "App URL not set. Set NEXT_PUBLIC_APP_URL or deploy to Vercel." };
+  try {
+    const state = base64UrlEncode(randomBytes(16));
+    const codeVerifier = base64UrlEncode(randomBytes(32));
+    const redirectUri = `${origin}/api/auth/granola/callback`;
+    await storeGranolaPending(state, codeVerifier, user.id);
+    const url = await buildGranolaAuthorizeUrl({ redirectUri, state, codeVerifier });
+    return { ok: true, url };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Failed to start Granola connection.";
+    return { ok: false, error: message };
+  }
+}
+
+export type GranolaConnectedResult = { ok: true; connected: boolean } | { ok: false; error: string };
+
+/** Check if the current user has connected their Granola account (OAuth). */
+export async function getGranolaConnected(): Promise<GranolaConnectedResult> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+  try {
+    const token = await getGranolaAccessTokenForUser(user.id);
+    return { ok: true, connected: !!token };
+  } catch {
+    return { ok: true, connected: false };
+  }
+}
+
 export async function listGranolaDocumentsForProject(): Promise<ListGranolaResult> {
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Not signed in." };
   try {
-    const documents = await listGranolaDocuments();
+    const accessToken = await getGranolaAccessTokenForUser(user.id);
+    const documents = await listGranolaDocuments(accessToken ?? undefined);
     return { ok: true, documents };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to list Granola documents.";
@@ -45,7 +92,8 @@ export async function importFromGranolaIntoProject(
     return { ok: false, error: "Choose at least one: create tasks or save as note." };
 
   try {
-    const transcript = await getGranolaTranscriptFull(documentId);
+    const accessToken = await getGranolaAccessTokenForUser(user.id);
+    const transcript = await getGranolaTranscriptFull(documentId, accessToken ?? undefined);
     let tasksCreated: number | undefined;
     let artifactId: string | undefined;
 

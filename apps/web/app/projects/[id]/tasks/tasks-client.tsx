@@ -54,6 +54,7 @@ export function TasksClient({
   const [meetingDue, setMeetingDue] = useState<"today" | "week">("week");
   const [granolaOpen, setGranolaOpen] = useState(false);
   const [granolaDocs, setGranolaDocs] = useState<GranolaDocument[]>([]);
+  const [granolaListError, setGranolaListError] = useState<string | null>(null);
   const [granolaLoading, setGranolaLoading] = useState(false);
   const [granolaSelectedId, setGranolaSelectedId] = useState("");
   const [granolaDue, setGranolaDue] = useState<"today" | "week">("week");
@@ -238,12 +239,16 @@ export function TasksClient({
   const handleOpenGranola = async () => {
     setGranolaOpen(true);
     setGranolaDocs([]);
+    setGranolaListError(null);
     setGranolaSelectedId("");
     setGranolaLoading(true);
     const result = await listGranolaDocumentsAction();
     setGranolaLoading(false);
     if (result.ok) setGranolaDocs(result.documents);
-    else addToast(result.error, "error");
+    else {
+      setGranolaListError(result.error);
+      addToast(result.error, "error");
+    }
   };
 
   const handleImportFromGranola = async (e: React.FormEvent) => {
@@ -399,6 +404,22 @@ export function TasksClient({
         </p>
         {granolaLoading ? (
           <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>Loading documents…</p>
+        ) : granolaListError ? (
+          <div
+            style={{
+              padding: "var(--space-3)",
+              background: "var(--color-error-subtle, rgba(185, 28, 28, 0.08))",
+              borderRadius: "var(--radius-md)",
+              border: "1px solid var(--color-error-border, rgba(185, 28, 28, 0.3))",
+            }}
+          >
+            <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-error, #b91c1c)", fontWeight: "var(--font-medium)" }}>
+              {granolaListError}
+            </p>
+            <p style={{ margin: "var(--space-2) 0 0 0", fontSize: "var(--text-xs)", color: "var(--color-text-muted)", lineHeight: 1.4 }}>
+              See Settings → Granola MCP for OAuth details. To use a bearer token, add GRANOLA_API_TOKEN to .env.local and restart.
+            </p>
+          </div>
         ) : granolaDocs.length === 0 ? (
           <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
             No documents found. Configure GRANOLA_MCP_URL in Settings (and .env.local).

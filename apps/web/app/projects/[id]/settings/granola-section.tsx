@@ -1,9 +1,10 @@
 import Link from "next/link";
+import { ConnectGranolaButton } from "./connect-granola-button";
 
 const MCP_URL = "https://mcp.granola.ai";
 const MCP_ENDPOINT = "https://mcp.granola.ai/mcp";
 
-export function GranolaSection({ configured }: { configured: boolean }) {
+export function GranolaSection({ configured, connected }: { configured: boolean; connected?: boolean }) {
   return (
     <section
       style={{
@@ -35,6 +36,8 @@ export function GranolaSection({ configured }: { configured: boolean }) {
       <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)", lineHeight: 1.5 }}>
         Import tasks and meeting notes from Granola transcripts. This app connects to the Granola MCP server to list and fetch your meeting data.
       </p>
+
+      <ConnectGranolaButton connected={connected ?? false} />
 
       <div
         style={{

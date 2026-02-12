@@ -60,3 +60,13 @@ export function getGranolaMcpUrlOptional(): string | undefined {
 export function getGranolaApiTokenOptional(): string | undefined {
   return process.env.GRANOLA_API_TOKEN?.trim() || undefined;
 }
+
+/** App origin for OAuth redirect_uri (e.g. https://app.example.com). Optional. */
+export function getAppOriginOptional(): string | undefined {
+  const url = process.env.NEXT_PUBLIC_APP_URL?.trim() || process.env.VERCEL_URL;
+  if (url) {
+    const origin = url.startsWith("http") ? url : `https://${url}`;
+    return origin.replace(/\/$/, "");
+  }
+  return undefined;
+}

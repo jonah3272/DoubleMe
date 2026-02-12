@@ -14,6 +14,7 @@ export function FromGranolaTrigger({ projectId, variant = "button" }: { projectI
   const [createTasks, setCreateTasks] = useState(true);
   const [createNote, setCreateNote] = useState(true);
   const [taskDueAt, setTaskDueAt] = useState<"today" | "week">("week");
+  const [listError, setListError] = useState<string | null>(null);
   const { addToast } = useToast();
   const router = useRouter();
 
@@ -21,11 +22,16 @@ export function FromGranolaTrigger({ projectId, variant = "button" }: { projectI
     setOpen(true);
     setDocuments([]);
     setSelectedId("");
+    setListError(null);
     setLoading(true);
     const result = await listGranolaDocumentsForProject();
     setLoading(false);
-    if (result.ok) setDocuments(result.documents);
-    else addToast(result.error, "error");
+    if (result.ok) {
+      setDocuments(result.documents);
+    } else {
+      setListError(result.error);
+      addToast(result.error, "error");
+    }
   };
 
   const handleImport = async (e: React.FormEvent) => {
@@ -89,6 +95,22 @@ export function FromGranolaTrigger({ projectId, variant = "button" }: { projectI
         </p>
         {loading ? (
           <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>Loading transcripts…</p>
+        ) : listError ? (
+          <div
+            style={{
+              padding: "var(--space-3)",
+              background: "var(--color-error-subtle, rgba(185, 28, 28, 0.08))",
+              borderRadius: "var(--radius-md)",
+              border: "1px solid var(--color-error-border, rgba(185, 28, 28, 0.3))",
+            }}
+          >
+            <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-error, #b91c1c)", fontWeight: "var(--font-medium)" }}>
+              {listError}
+            </p>
+            <p style={{ margin: "var(--space-2) 0 0 0", fontSize: "var(--text-xs)", color: "var(--color-text-muted)", lineHeight: 1.4 }}>
+              See Settings → Granola MCP for the connection URL and OAuth details. To use a bearer token from another tool, add GRANOLA_API_TOKEN to .env.local and restart.
+            </p>
+          </div>
         ) : documents.length === 0 ? (
           <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
             No transcripts found. Configure Granola MCP in Settings (e.g. GRANOLA_MCP_URL in .env.local).

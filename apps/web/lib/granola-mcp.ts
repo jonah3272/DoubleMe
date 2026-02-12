@@ -37,6 +37,11 @@ async function postMessage(url: string, token: string | undefined, message: Json
   });
 
   if (!res.ok) {
+    if (res.status === 401) {
+      throw new Error(
+        "Granola MCP requires sign-in (401). The official server uses OAuth — there is no API key. If you have a bearer token from another tool, set GRANOLA_API_TOKEN in .env.local."
+      );
+    }
     throw new Error(`Granola MCP: ${res.status} ${res.statusText}`);
   }
 
@@ -70,10 +75,10 @@ export type GranolaDocument = {
 };
 
 /** List tools from Granola MCP and call the one that lists documents/transcripts. */
-export async function listGranolaDocuments(): Promise<GranolaDocument[]> {
+export async function listGranolaDocuments(accessToken?: string): Promise<GranolaDocument[]> {
   const url = getGranolaMcpUrlOptional();
   if (!url) throw new Error("Granola MCP URL is not set.");
-  const token = getGranolaApiTokenOptional();
+  const token = accessToken ?? getGranolaApiTokenOptional();
 
   await ensureInitialized(url, token);
 
@@ -126,10 +131,10 @@ export async function listGranolaDocuments(): Promise<GranolaDocument[]> {
 export type GranolaTranscriptFull = { title: string; content: string; created_at?: string; updated_at?: string };
 
 /** Get one transcript by ID; returns full object for creating tasks and notes. */
-export async function getGranolaTranscriptFull(documentId: string): Promise<GranolaTranscriptFull> {
+export async function getGranolaTranscriptFull(documentId: string, accessToken?: string): Promise<GranolaTranscriptFull> {
   const url = getGranolaMcpUrlOptional();
   if (!url) throw new Error("Granola MCP URL is not set.");
-  const token = getGranolaApiTokenOptional();
+  const token = accessToken ?? getGranolaApiTokenOptional();
 
   await ensureInitialized(url, token);
 
@@ -183,8 +188,8 @@ export async function getGranolaTranscriptFull(documentId: string): Promise<Gran
 }
 
 /** Get one transcript by ID and return its text content (for parsing action items). */
-export async function getGranolaTranscriptContent(documentId: string): Promise<string> {
-  const full = await getGranolaTranscriptFull(documentId);
+export async function getGranolaTranscriptContent(documentId: string, accessToken?: string): Promise<string> {
+  const full = await getGranolaTranscriptFull(documentId, accessToken);
   return full.content;
 }
 
