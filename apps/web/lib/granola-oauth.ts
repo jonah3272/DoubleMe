@@ -53,6 +53,8 @@ async function getOrRegisterClient(redirectUri: string): Promise<{ client_id: st
       redirect_uris: [redirectUri],
       client_name: "DoubleMe",
       scope: "openid profile email offline_access",
+      grant_types: ["authorization_code", "refresh_token"],
+      response_types: ["code"],
       token_endpoint_auth_method: "none",
       code_challenge_method: "S256",
       application_type: "web",
