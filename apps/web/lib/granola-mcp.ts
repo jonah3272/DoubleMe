@@ -124,27 +124,35 @@ const LIST_TOOL_PRIORITY = [
   "search_granola_transcripts",
 ];
 
+/** Tools that fetch a single transcript by ID — must not be offered as "list" tools. */
+const LIST_TOOL_EXCLUDE = new Set([
+  "get_meeting_transcript",
+  "get_granola_transcript",
+  "get_granola_document",
+  "get_transcript",
+]);
+
+/** Return only tool names that are suitable for listing meetings (excludes single-item fetch tools). */
+function getListToolNames(toolNames: string[]): string[] {
+  return toolNames.filter(
+    (n) =>
+      !LIST_TOOL_EXCLUDE.has(n) &&
+      (LIST_TOOL_PRIORITY.includes(n) ||
+        (n.includes("list") && (n.toLowerCase().includes("granola") || n.toLowerCase().includes("meeting"))) ||
+        (/search|list|query/.test(n) && n.toLowerCase().includes("meeting")) ||
+        (n.toLowerCase().includes("meeting") &&
+          !n.toLowerCase().includes("transcript") &&
+          !n.toLowerCase().includes("document")))
+  );
+}
+
 function pickListTool(toolNames: string[], preferred?: string): string | null {
-  if (preferred && toolNames.includes(preferred)) return preferred;
+  const listTools = getListToolNames(toolNames);
+  if (preferred && listTools.includes(preferred)) return preferred;
   for (const name of LIST_TOOL_PRIORITY) {
-    if (toolNames.includes(name)) return name;
+    if (listTools.includes(name)) return name;
   }
-  const listLike = toolNames.find(
-    (n) =>
-      n.includes("list") && (n.toLowerCase().includes("granola") || n.toLowerCase().includes("meeting"))
-  );
-  if (listLike) return listLike;
-  const searchGet = toolNames.find(
-    (n) => /search|list|query|get/.test(n) && n.toLowerCase().includes("meeting")
-  );
-  if (searchGet) return searchGet;
-  const anyMeeting = toolNames.find(
-    (n) =>
-      n.toLowerCase().includes("meeting") &&
-      !n.toLowerCase().includes("transcript") &&
-      !n.toLowerCase().includes("document")
-  );
-  return anyMeeting ?? null;
+  return listTools[0] ?? null;
 }
 
 /** Return MCP tool names: all tools and those suitable for listing meetings/documents. */
@@ -165,8 +173,9 @@ export async function listGranolaMcpTools(accessToken?: string): Promise<{
   });
   const tools = (listRes.result as { tools?: { name: string }[] })?.tools ?? [];
   const allTools = tools.map((t) => t.name);
+  const listTools = getListToolNames(allTools);
   const defaultListTool = pickListTool(allTools);
-  return { allTools, listTools: allTools, defaultListTool };
+  return { allTools, listTools, defaultListTool };
 }
 
 export type ListGranolaDocumentsResult = { documents: GranolaDocument[]; debug?: string };
@@ -191,9 +200,11 @@ export async function listGranolaDocuments(
   });
 
   const tools = (listRes.result as { tools?: { name: string }[] })?.tools ?? [];
-  const toolNames = tools.map((t) => t.name);
-
-  const listTool = pickListTool(toolNames, preferredListTool ?? undefined);
+  const allNames = tools.map((t) => t.name);
+  const listToolNames = getListToolNames(allNames);
+  const listTool = preferredListTool && listToolNames.includes(preferredListTool)
+    ? preferredListTool
+    : pickListTool(allNames);
 
   if (!listTool) {
     throw new Error("Granola MCP does not expose a list documents/transcripts tool. Available: " + (toolNames.length ? toolNames.join(", ") : "none"));
@@ -220,10 +231,17 @@ export async function listGranolaDocuments(
 
   const text = extractTextFromToolResult(callRes.result);
   if (!text) {
+    const rawPreview =
+      typeof callRes.result === "string"
+        ? callRes.result.slice(0, 800)
+        : JSON.stringify(callRes.result ?? {}).slice(0, 800);
     const debug =
       process.env.GRANOLA_DEBUG
-        ? `No text in response. Raw (first 800 chars): ${typeof callRes.result === "string" ? callRes.result : JSON.stringify(callRes.result ?? {}).slice(0, 800)}`
-        : undefined;
+        ? `No text in response. Raw (first 800 chars): ${rawPreview}`
+        : `No text in MCP response. Tool: ${listTool}. Add GRANOLA_DEBUG=1 to .env.local and restart to see raw response.`;
+    if (process.env.GRANOLA_DEBUG) {
+      console.warn("[Granola MCP] list tool returned no text:", listTool, callRes.result);
+    }
     return { documents: [], debug };
   }
 
@@ -232,22 +250,27 @@ export async function listGranolaDocuments(
     .map(normalizeGranolaDocument)
     .filter((d) => d.id || d.title);
 
-  const debug =
-    documents.length === 0 && process.env.GRANOLA_DEBUG
-      ? `Tool: ${listTool}. Args: ${JSON.stringify(listArgs)}. Text length: ${text.length}. First 800 chars: ${text.slice(0, 800)}`
+  const alwaysDebugWhenEmpty =
+    documents.length === 0
+      ? process.env.GRANOLA_DEBUG
+        ? `Tool: ${listTool}. Args: ${JSON.stringify(listArgs)}. Text length: ${text.length}. First 800 chars:\n${text.slice(0, 800)}`
+        : `Tool: ${listTool}. Response: ${text.length} chars. No parseable meetings. Add GRANOLA_DEBUG=1 to .env.local and restart to see raw MCP response.`
       : undefined;
+  if (documents.length === 0 && process.env.GRANOLA_DEBUG) {
+    console.warn("[Granola MCP] list response (first 1200 chars):", text.slice(0, 1200));
+  }
 
-  return { documents, debug };
+  return { documents, debug: alwaysDebugWhenEmpty };
 }
 
 /** Extract raw text from MCP tools/call result (content array or inline text). */
 function extractTextFromToolResult(result: unknown): string {
   if (result == null) return "";
-  const content = (result as { content?: { type?: string; text?: string }[] })?.content;
+  const content = (result as { content?: { type?: string; text?: string; value?: string }[] })?.content;
   if (Array.isArray(content)) {
     const parts = content
       .filter((c) => c?.type === "text" || !c?.type)
-      .map((c) => (c as { text?: string }).text)
+      .map((c) => (c as { text?: string; value?: string }).text ?? (c as { value?: string }).value)
       .filter(Boolean) as string[];
     if (parts.length) return parts.join("\n");
   }
@@ -274,12 +297,39 @@ function extractJsonFromText(text: string): string {
 
 /** Parse tool response into array of item objects; handles many common response shapes. */
 function parseListResponse(text: string): Record<string, unknown>[] {
-  const toParse = extractJsonFromText(text);
+  let toParse = extractJsonFromText(text);
   let parsed: unknown;
   try {
     parsed = JSON.parse(toParse);
   } catch {
-    return [];
+    // Try to find JSON array or object in the text (preamble/formatting)
+    const arrayStart = text.indexOf("[");
+    const objectStart = text.indexOf("{");
+    if (arrayStart >= 0 && (objectStart < 0 || arrayStart < objectStart)) {
+      const end = text.lastIndexOf("]");
+      if (end > arrayStart) {
+        try {
+          parsed = JSON.parse(text.slice(arrayStart, end + 1));
+        } catch {
+          return [];
+        }
+      } else {
+        return [];
+      }
+    } else if (objectStart >= 0) {
+      const end = text.lastIndexOf("}");
+      if (end > objectStart) {
+        try {
+          parsed = JSON.parse(text.slice(objectStart, end + 1));
+        } catch {
+          return [];
+        }
+      } else {
+        return [];
+      }
+    } else {
+      return [];
+    }
   }
   if (Array.isArray(parsed)) {
     const arr = parsed as unknown[];

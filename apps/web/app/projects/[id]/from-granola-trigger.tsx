@@ -273,26 +273,28 @@ export function FromGranolaTrigger({
                 <p style={{ margin: "var(--space-2) 0 0 0", fontSize: "var(--text-xs)", color: "var(--color-text-subtle)", lineHeight: 1.4 }}>
                   Make sure you connected Granola in <Link href={`/projects/${projectId}/settings#granola`} style={{ color: "var(--color-primary)", textDecoration: "none" }}>Project Settings</Link>. On the free plan, only notes from the last 30 days are available.
                 </p>
-                {listDebug && (
-                  <div
-                    style={{
-                      padding: "var(--space-3)",
-                      background: "var(--color-surface-elevated)",
-                      borderRadius: "var(--radius-md)",
-                      border: "1px solid var(--color-border)",
-                      fontSize: "var(--text-xs)",
-                      fontFamily: "monospace",
-                      whiteSpace: "pre-wrap",
-                      wordBreak: "break-all",
-                      color: "var(--color-text-muted)",
-                      maxHeight: 200,
-                      overflow: "auto",
-                    }}
-                  >
-                    <strong style={{ color: "var(--color-text)" }}>Debug (set GRANOLA_DEBUG=1)</strong>
-                    <pre style={{ margin: "var(--space-2) 0 0 0" }}>{listDebug}</pre>
-                  </div>
-                )}
+                <div
+                  style={{
+                    marginTop: "var(--space-3)",
+                    padding: "var(--space-3)",
+                    background: "var(--color-surface-elevated)",
+                    borderRadius: "var(--radius-md)",
+                    border: "1px solid var(--color-border)",
+                    fontSize: "var(--text-xs)",
+                    fontFamily: "monospace",
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-all",
+                    color: "var(--color-text-muted)",
+                    maxHeight: 280,
+                    overflow: "auto",
+                  }}
+                >
+                  <strong style={{ color: "var(--color-text)" }}>Debug</strong>
+                  <p style={{ margin: "var(--space-1) 0 0 0", fontSize: "var(--text-xs)", color: "var(--color-text-subtle)" }}>
+                    {listDebug ? "Response info below. For full raw response, add GRANOLA_DEBUG=1 to .env.local and restart the dev server." : "Add GRANOLA_DEBUG=1 to .env.local, restart the dev server, then click Load meetings again to see the raw MCP response here."}
+                  </p>
+                  {listDebug && <pre style={{ margin: "var(--space-2) 0 0 0" }}>{listDebug}</pre>}
+                </div>
               </>
             )}
             {listFetched && documents.length > 0 && (

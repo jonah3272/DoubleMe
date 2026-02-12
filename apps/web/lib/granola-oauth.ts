@@ -169,16 +169,47 @@ export async function saveGranolaTokens(
   );
 }
 
-/** Get access token for user (for MCP calls). Returns null if not connected. */
+/** Get access token for user (for MCP calls). Refreshes if expired and we have refresh_token. Returns null if not connected. */
 export async function getGranolaAccessTokenForUser(userId: string): Promise<string | null> {
   const supabase = createServiceRoleClient();
-  const { data } = await supabase.from("granola_tokens").select("access_token, expires_at").eq("user_id", userId).single();
+  const { data } = await supabase
+    .from("granola_tokens")
+    .select("access_token, refresh_token, expires_at")
+    .eq("user_id", userId)
+    .single();
   if (!data?.access_token) return null;
-  if (data.expires_at && new Date(data.expires_at) <= new Date()) {
-    // TODO: refresh using refresh_token if we have it
+  const now = new Date();
+  const expired = data.expires_at && new Date(data.expires_at) <= now;
+  if (!expired) return data.access_token;
+  if (!data.refresh_token) return null;
+  try {
+    const meta = await getMetadata();
+    const { data: clientRow } = await supabase.from("granola_oauth_client").select("client_id, client_secret").single();
+    if (!clientRow?.client_id) return null;
+    const body = new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: data.refresh_token,
+      client_id: clientRow.client_id,
+    });
+    if (clientRow.client_secret) body.set("client_secret", clientRow.client_secret);
+    const res = await fetch(meta.token_endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: body.toString(),
+    });
+    if (!res.ok) return null;
+    const tokens = (await res.json()) as { access_token: string; refresh_token?: string; expires_in?: number };
+    const newRefresh = tokens.refresh_token ?? data.refresh_token;
+    await saveGranolaTokens(
+      userId,
+      tokens.access_token,
+      newRefresh,
+      tokens.expires_in ?? null
+    );
+    return tokens.access_token;
+  } catch {
     return null;
   }
-  return data.access_token;
 }
 
 /** Reset Granola OAuth so the next "Connect to Granola" runs as if first time: clear stored client (forces new DCR) and this user's token. */
