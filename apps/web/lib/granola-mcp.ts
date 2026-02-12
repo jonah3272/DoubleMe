@@ -207,7 +207,7 @@ export async function listGranolaDocuments(
     : pickListTool(allNames);
 
   if (!listTool) {
-    throw new Error("Granola MCP does not expose a list documents/transcripts tool. Available: " + (toolNames.length ? toolNames.join(", ") : "none"));
+    throw new Error("Granola MCP does not expose a list documents/transcripts tool. Available: " + (allNames.length ? allNames.join(", ") : "none"));
   }
 
   // Official Granola: list_meetings / get_meetings accept limit; optional query for natural-language filter (e.g. "meetings with Sam last week")
