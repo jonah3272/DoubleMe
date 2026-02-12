@@ -73,8 +73,9 @@ async function postMessage(url: string, token: string | undefined, message: Json
         /* skip malformed line */
       }
     }
-    const matching = validResponses.find((r) => r.id === requestId);
-    const lastValid = matching ?? validResponses[validResponses.length - 1] ?? null;
+    // Prefer last response with matching id (streaming may send multiple events with same id)
+    const matching = validResponses.filter((r) => r.id === requestId);
+    const lastValid = matching.length > 0 ? matching[matching.length - 1] : validResponses[validResponses.length - 1] ?? null;
     if (!lastValid) throw new Error("Granola MCP: no valid JSON-RPC message in SSE response");
     data = lastValid;
   } else {
@@ -198,14 +199,14 @@ export async function listGranolaDocuments(
     throw new Error("Granola MCP does not expose a list documents/transcripts tool. Available: " + (toolNames.length ? toolNames.join(", ") : "none"));
   }
 
-  // Official Granola: list_meetings / get_meetings / query_granola_meetings may accept {} or limit
+  // Official Granola: list_meetings / get_meetings accept limit; optional query for natural-language filter (e.g. "meetings with Sam last week")
   const listArgs =
     listTool === "search_meetings"
       ? { query: (searchQuery?.trim() || "*"), limit: 100 }
       : listTool === "list_granola_documents"
         ? { limit: 100 }
         : listTool === "list_meetings" || listTool === "get_meetings" || listTool === "query_granola_meetings"
-          ? { limit: 50 }
+          ? { limit: 50, ...(searchQuery?.trim() ? { query: searchQuery.trim() } : {}) }
           : {};
   const callRes = await postMessage(url, token, {
     jsonrpc: "2.0",
@@ -220,9 +221,9 @@ export async function listGranolaDocuments(
   const text = extractTextFromToolResult(callRes.result);
   if (!text) {
     const debug =
-      process.env.GRANOLA_DEBUG ?
-        `No text in response. Raw (first 800 chars): ${typeof callRes.result === "string" ? callRes.result : JSON.stringify(callRes.result ?? {}).slice(0, 800)}`
-      : undefined;
+      process.env.GRANOLA_DEBUG
+        ? `No text in response. Raw (first 800 chars): ${typeof callRes.result === "string" ? callRes.result : JSON.stringify(callRes.result ?? {}).slice(0, 800)}`
+        : undefined;
     return { documents: [], debug };
   }
 
@@ -233,7 +234,7 @@ export async function listGranolaDocuments(
 
   const debug =
     documents.length === 0 && process.env.GRANOLA_DEBUG
-      ? `Tool: ${listTool}. Raw text (first 600 chars): ${text.slice(0, 600)}`
+      ? `Tool: ${listTool}. Args: ${JSON.stringify(listArgs)}. Text length: ${text.length}. First 800 chars: ${text.slice(0, 800)}`
       : undefined;
 
   return { documents, debug };
@@ -297,6 +298,7 @@ function parseListResponse(text: string): Record<string, unknown>[] {
     "results",
     "items",
     "data",
+    "content",
     "hits",
     "list",
     "meeting_ids",
@@ -332,7 +334,12 @@ function normalizeGranolaDocument(item: Record<string, unknown>): GranolaDocumen
       item._id ??
       item.uuid ??
       (item as Record<string, unknown>).meetingId ??
-      ""
+      (() => {
+        for (const [k, v] of Object.entries(item)) {
+          if ((k === "id" || k.endsWith("_id") || k.endsWith("Id")) && v != null && String(v).trim()) return String(v);
+        }
+        return "";
+      })()
   );
   const title = [
     item.title,
@@ -342,16 +349,26 @@ function normalizeGranolaDocument(item: Record<string, unknown>): GranolaDocumen
     (item as Record<string, unknown>).meeting_title,
     (item as Record<string, unknown>).meeting_title_override,
   ].find((t) => t != null) as string | undefined;
+  const titleFallback =
+    title ??
+    (() => {
+      for (const [k, v] of Object.entries(item)) {
+        if ((k === "title" || k === "name" || k.includes("title") || k.includes("name")) && typeof v === "string" && v.trim()) return v;
+      }
+      return undefined;
+    })();
   return {
     id,
-    title: title != null ? String(title) : undefined,
+    title: title != null ? String(title) : titleFallback ?? undefined,
     type: item.type != null ? String(item.type) : undefined,
     created_at:
       item.created_at != null
         ? String(item.created_at)
         : (item as Record<string, unknown>).meeting_date != null
           ? String((item as Record<string, unknown>).meeting_date)
-          : undefined,
+          : (item as Record<string, unknown>).date != null
+            ? String((item as Record<string, unknown>).date)
+            : undefined,
     updated_at: item.updated_at != null ? String(item.updated_at) : undefined,
   };
 }

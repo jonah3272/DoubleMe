@@ -3,7 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Dialog, useToast } from "@/components/ui";
+import Link from "next/link";
 import {
+  getGranolaConnected,
   getGranolaMcpToolsForProject,
   listGranolaDocumentsForProject,
   importFromGranolaIntoProject,
@@ -35,6 +37,7 @@ export function FromGranolaTrigger({
   const [toolsError, setToolsError] = useState<string | null>(null);
   const [listFetched, setListFetched] = useState(false);
   const [listDebug, setListDebug] = useState<string | null>(null);
+  const [connected, setConnected] = useState<boolean | null>(null);
   const { addToast } = useToast();
   const router = useRouter();
 
@@ -45,9 +48,19 @@ export function FromGranolaTrigger({
     setListError(null);
     setListFetched(false);
     setToolsError(null);
+    setConnected(null);
     setLoadingTools(true);
+    const connectedResult = await getGranolaConnected();
+    if (connectedResult.ok && !connectedResult.connected) {
+      setLoadingTools(false);
+      setConnected(false);
+      setListTools([]);
+      setSelectedListTool("");
+      return;
+    }
     const toolsResult = await getGranolaMcpToolsForProject();
     setLoadingTools(false);
+    if (connectedResult.ok) setConnected(connectedResult.connected);
     if (toolsResult.ok) {
       setListTools(toolsResult.listTools);
       setSelectedListTool(toolsResult.defaultListTool ?? toolsResult.listTools[0] ?? "");
@@ -141,7 +154,36 @@ export function FromGranolaTrigger({
         <p style={{ margin: "0 0 var(--space-3) 0", fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
           Pick a meeting transcript to create tasks and/or a meeting note in this project.
         </p>
-        {loadingTools ? (
+        {connected === false ? (
+          <div
+            style={{
+              padding: "var(--space-4)",
+              background: "var(--color-primary-muted)",
+              borderRadius: "var(--radius-md)",
+              border: "1px solid var(--color-primary-border, rgba(59, 130, 246, 0.3))",
+            }}
+          >
+            <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text)", fontWeight: "var(--font-medium)" }}>
+              Connect your Granola account in this app first.
+            </p>
+            <p style={{ margin: "var(--space-2) 0 0 0", fontSize: "var(--text-sm)", color: "var(--color-text-muted)", lineHeight: 1.5 }}>
+              Connecting in Claude or ChatGPT only gives that tool access. This app needs its own connection so it can load your meetings here.
+            </p>
+            <Link
+              href={`/projects/${projectId}/settings#granola`}
+              style={{
+                display: "inline-block",
+                marginTop: "var(--space-3)",
+                fontSize: "var(--text-sm)",
+                fontWeight: "var(--font-semibold)",
+                color: "var(--color-primary)",
+                textDecoration: "none",
+              }}
+            >
+              Go to Settings → Granola MCP → Connect →
+            </Link>
+          </div>
+        ) : loadingTools ? (
           <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>Connecting to Granola…</p>
         ) : toolsError ? (
           <div
@@ -195,7 +237,7 @@ export function FromGranolaTrigger({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder='For search_meetings: * or a keyword (e.g. "meeting"). Ignored by other tools.'
+                placeholder='Optional: keyword or natural language (e.g. "rdg" or "meetings with Sam last week")'
                 style={{
                   width: "100%",
                   padding: "var(--space-2) var(--space-3)",
@@ -226,7 +268,10 @@ export function FromGranolaTrigger({
             {listFetched && documents.length === 0 && !listError && (
               <>
                 <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
-                  No meetings returned. Try another list tool above.
+                  No meetings returned. Try another list tool or a different search query.
+                </p>
+                <p style={{ margin: "var(--space-2) 0 0 0", fontSize: "var(--text-xs)", color: "var(--color-text-subtle)", lineHeight: 1.4 }}>
+                  Make sure you connected Granola in <Link href={`/projects/${projectId}/settings#granola`} style={{ color: "var(--color-primary)", textDecoration: "none" }}>Project Settings</Link>. On the free plan, only notes from the last 30 days are available.
                 </p>
                 {listDebug && (
                   <div

@@ -7,6 +7,7 @@ const MCP_ENDPOINT = "https://mcp.granola.ai/mcp";
 export function GranolaSection({ configured, connected }: { configured: boolean; connected?: boolean }) {
   return (
     <section
+      id="granola"
       style={{
         border: "1px solid var(--color-border)",
         borderRadius: "var(--radius-lg)",
