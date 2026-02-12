@@ -94,12 +94,12 @@ export async function getGranolaMcpToolsForProject(): Promise<GranolaMcpToolsRes
   }
 }
 
-export async function listGranolaDocumentsForProject(listTool?: string): Promise<ListGranolaResult> {
+export async function listGranolaDocumentsForProject(listTool?: string, searchQuery?: string): Promise<ListGranolaResult> {
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Not signed in." };
   try {
     const accessToken = await getGranolaAccessTokenForUser(user.id);
-    const documents = await listGranolaDocuments(accessToken ?? undefined, listTool ?? undefined);
+    const documents = await listGranolaDocuments(accessToken ?? undefined, listTool ?? undefined, searchQuery ?? undefined);
     return { ok: true, documents };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to list Granola documents.";

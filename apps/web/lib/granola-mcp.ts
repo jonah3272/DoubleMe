@@ -171,7 +171,8 @@ export async function listGranolaMcpTools(accessToken?: string): Promise<{
 /** List tools from Granola MCP and call the one that lists documents/transcripts. */
 export async function listGranolaDocuments(
   accessToken?: string,
-  preferredListTool?: string
+  preferredListTool?: string,
+  searchQuery?: string
 ): Promise<GranolaDocument[]> {
   const url = getGranolaMcpUrlOptional();
   if (!url) throw new Error("Granola MCP URL is not set.");
@@ -195,10 +196,10 @@ export async function listGranolaDocuments(
     throw new Error("Granola MCP does not expose a list documents/transcripts tool. Available: " + (toolNames.length ? toolNames.join(", ") : "none"));
   }
 
-  // search_meetings: query, limit; list_meetings / list_granola_documents / get_meetings / query_granola_meetings: limit or {}
+  // search_meetings: use custom query if provided, else "*" (empty often returns nothing)
   const listArgs =
     listTool === "search_meetings"
-      ? { query: "", limit: 100 }
+      ? { query: (searchQuery?.trim() || "*"), limit: 100 }
       : listTool === "list_granola_documents" ||
           listTool === "get_meetings" ||
           listTool === "query_granola_meetings" ||
@@ -215,31 +216,72 @@ export async function listGranolaDocuments(
     },
   });
 
-  const content = (callRes.result as { content?: { type: string; text?: string }[] })?.content;
-  if (!content?.length || content[0].type !== "text") return [];
-  const text = content[0].text ?? "";
+  const text = extractTextFromToolResult(callRes.result);
+  if (!text) return [];
+
+  const raw = parseListResponse(text);
+  return raw
+    .map(normalizeGranolaDocument)
+    .filter((d) => d.id || d.title);
+}
+
+/** Extract raw text from MCP tools/call result (content array or inline text). */
+function extractTextFromToolResult(result: unknown): string {
+  if (result == null) return "";
+  const content = (result as { content?: { type?: string; text?: string }[] })?.content;
+  if (Array.isArray(content)) {
+    const parts = content
+      .filter((c) => c?.type === "text" || !c?.type)
+      .map((c) => (c as { text?: string }).text)
+      .filter(Boolean) as string[];
+    if (parts.length) return parts.join("\n");
+  }
+  if (typeof (result as { text?: string }).text === "string") return (result as { text: string }).text;
+  if (typeof result === "string") return result;
+  return "";
+}
+
+/** Parse tool response into array of item objects; handles many common response shapes. */
+function parseListResponse(text: string): Record<string, unknown>[] {
+  let parsed: unknown;
   try {
-    // search_meetings: { meetings? } or { results? }; list_granola_documents: { documents }; etc.
-    const parsed = JSON.parse(text) as
-      | Record<string, unknown>[]
-      | {
-          documents?: Record<string, unknown>[];
-          transcripts?: Record<string, unknown>[];
-          meetings?: Record<string, unknown>[];
-          results?: Record<string, unknown>[];
-        };
-    const raw: Record<string, unknown>[] = Array.isArray(parsed)
-      ? parsed
-      : parsed.documents ?? parsed.transcripts ?? parsed.meetings ?? parsed.results ?? [];
-    return raw.map(normalizeGranolaDocument);
+    parsed = JSON.parse(text);
   } catch {
     return [];
   }
+  if (Array.isArray(parsed)) return parsed as Record<string, unknown>[];
+
+  const obj = parsed as Record<string, unknown>;
+  const knownKeys = ["documents", "transcripts", "meetings", "results", "items", "data", "hits", "list"];
+  for (const key of knownKeys) {
+    const val = obj[key];
+    if (Array.isArray(val) && val.length > 0 && typeof val[0] === "object" && val[0] !== null) {
+      return val as Record<string, unknown>[];
+    }
+  }
+  // Any key whose value is an array of objects
+  for (const value of Object.values(obj)) {
+    if (Array.isArray(value) && value.length > 0 && typeof value[0] === "object" && value[0] !== null) {
+      return value as Record<string, unknown>[];
+    }
+  }
+  // Nested: { data: { meetings: [...] } } or { response: { items: [...] } }
+  for (const value of Object.values(obj)) {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      const inner = parseListResponse(JSON.stringify(value));
+      if (inner.length > 0) return inner;
+    }
+  }
+  return [];
 }
 
 function normalizeGranolaDocument(item: Record<string, unknown>): GranolaDocument {
-  const id = String(item.id ?? item.meeting_id ?? item.document_id ?? "");
-  const title = [item.title, item.name, item.subject].find((t) => t != null) as string | undefined;
+  const id = String(
+    item.id ?? item.meeting_id ?? item.document_id ?? item._id ?? item.uuid ?? ""
+  );
+  const title = [item.title, item.name, item.subject, item.summary].find(
+    (t) => t != null
+  ) as string | undefined;
   return {
     id,
     title: title != null ? String(title) : undefined,

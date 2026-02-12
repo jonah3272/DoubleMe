@@ -23,6 +23,7 @@ export function FromGranolaTrigger({ projectId, variant = "button" }: { projectI
   const [listError, setListError] = useState<string | null>(null);
   const [listTools, setListTools] = useState<string[]>([]);
   const [selectedListTool, setSelectedListTool] = useState<string>("");
+  const [searchQuery, setSearchQuery] = useState<string>("");
   const [toolsError, setToolsError] = useState<string | null>(null);
   const [listFetched, setListFetched] = useState(false);
   const { addToast } = useToast();
@@ -54,7 +55,7 @@ export function FromGranolaTrigger({ projectId, variant = "button" }: { projectI
     if (!selectedListTool) return;
     setListError(null);
     setLoadingList(true);
-    const result = await listGranolaDocumentsForProject(selectedListTool);
+    const result = await listGranolaDocumentsForProject(selectedListTool, selectedListTool === "search_meetings" ? searchQuery : undefined);
     setLoadingList(false);
     setListFetched(true);
     if (result.ok) {
@@ -170,6 +171,27 @@ export function FromGranolaTrigger({ projectId, variant = "button" }: { projectI
                 Choose which MCP tool to use to list meetings. Then click Load meetings.
               </p>
             </div>
+            {selectedListTool === "search_meetings" && (
+              <div>
+                <label style={{ fontSize: "var(--text-sm)", fontWeight: "var(--font-medium)", display: "block", marginBottom: "var(--space-2)" }}>
+                  Search query (optional)
+                </label>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="* or leave blank for all; try 'meeting' or a keyword"
+                  style={{
+                    width: "100%",
+                    padding: "var(--space-2) var(--space-3)",
+                    borderRadius: "var(--radius-md)",
+                    border: "1px solid var(--color-border)",
+                    fontSize: "var(--text-sm)",
+                    backgroundColor: "var(--color-bg)",
+                  }}
+                />
+              </div>
+            )}
             <Button type="button" variant="secondary" onClick={handleLoadMeetings} disabled={loadingList || !selectedListTool}>
               {loadingList ? "Loading…" : "Load meetings"}
             </Button>
