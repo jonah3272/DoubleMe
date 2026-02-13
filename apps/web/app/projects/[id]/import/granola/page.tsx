@@ -1,4 +1,4 @@
-import dynamic from "next/dynamic";
+import nextDynamic from "next/dynamic";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isValidProjectId } from "@/lib/validators";
@@ -6,7 +6,7 @@ import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { ProjectSidebar } from "../../project-sidebar";
 
-const GranolaImportClient = dynamic(
+const GranolaImportClient = nextDynamic(
   () => import("./granola-import-client").then((m) => ({ default: m.GranolaImportClient })),
   { ssr: true, loading: () => <div style={{ padding: "var(--space-8)", minHeight: 200, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-text-muted)", fontSize: "var(--text-sm)" }}>Loading…</div> }
 );
