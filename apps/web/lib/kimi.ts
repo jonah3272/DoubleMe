@@ -7,6 +7,13 @@
 import { getKimiApiKeyOptional } from "@/lib/env";
 
 const KIMI_API_BASE = "https://api.moonshot.ai/v1";
+
+function kimiKeyMissingMessage(): string {
+  if (process.env.VERCEL) {
+    return "KIMI_API_KEY is not set. In Vercel: Project → Settings → Environment Variables, add KIMI_API_KEY for Production, then redeploy.";
+  }
+  return "KIMI_API_KEY is not set. Add it to .env or .env.local to use this.";
+}
 const MODEL = "kimi-k2-turbo-preview";
 
 export type SynthesizeResult =
@@ -31,7 +38,7 @@ export async function synthesizeTranscriptWithKimi(
 ): Promise<SynthesizeResult> {
   const apiKey = getKimiApiKeyOptional();
   if (!apiKey) {
-    return { ok: false, error: "KIMI_API_KEY is not set. Add it to .env (or .env.local) to use synthesis." };
+    return { ok: false, error: kimiKeyMissingMessage() };
   }
 
   const userContent = `Meeting: ${title}\n\nRaw transcript:\n\n${rawContent.slice(0, 30000)}`;
@@ -93,7 +100,7 @@ export type ExtractMeetingsResult =
 export async function extractMeetingsFromRawText(rawText: string): Promise<ExtractMeetingsResult> {
   const apiKey = getKimiApiKeyOptional();
   if (!apiKey) {
-    return { ok: false, error: "KIMI_API_KEY is not set. Add it to .env (or .env.local) to extract meetings." };
+    return { ok: false, error: kimiKeyMissingMessage() };
   }
 
   const truncated = rawText.slice(0, 50000);
@@ -157,7 +164,7 @@ export async function askKimiAboutData(
 ): Promise<SynthesizeResult> {
   const apiKey = getKimiApiKeyOptional();
   if (!apiKey) {
-    return { ok: false, error: "KIMI_API_KEY is not set. Add it to .env (or .env.local) to use this." };
+    return { ok: false, error: kimiKeyMissingMessage() };
   }
 
   const truncated = contextContent.slice(0, 40000);
