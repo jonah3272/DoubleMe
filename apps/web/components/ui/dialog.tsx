@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 
 export interface DialogProps {
@@ -42,7 +43,7 @@ export function Dialog({ open, onClose, title, children }: DialogProps) {
     };
   }, [open]);
 
-  return (
+  const content = (
     <AnimatePresence>
       {open && (
         <>
@@ -111,4 +112,9 @@ export function Dialog({ open, onClose, title, children }: DialogProps) {
       )}
     </AnimatePresence>
   );
+
+  if (typeof document !== "undefined") {
+    return createPortal(content, document.body);
+  }
+  return content;
 }
