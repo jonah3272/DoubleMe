@@ -34,6 +34,7 @@ export type TaskRow = {
   assignee_name: string | null;
   due_at: string | null;
   notes: string | null;
+  source_meeting_label: string | null;
 };
 
 export type ContactOption = { id: string; name: string };
@@ -65,7 +66,11 @@ export function TasksClient({
   const [submitting, setSubmitting] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [viewFilter, setViewFilter] = useState<"this_week" | "all">("this_week");
+  const [viewMode, setViewMode] = useState<"list" | "board">("list");
+  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
+  const [boardDropTarget, setBoardDropTarget] = useState<TaskStatus | null>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState({
     title: "",
@@ -121,6 +126,7 @@ export function TasksClient({
           assignee_name: assignee?.name ?? null,
           due_at: form.due_at || null,
           notes: form.notes.trim() || null,
+          source_meeting_label: null,
         },
       ]);
     } else {
@@ -282,6 +288,21 @@ export function TasksClient({
     el.indeterminate = n > 0 && selectedIds.size > 0 && selectedIds.size < n;
   }, [selectedIds.size, displayedTasks.length]);
 
+  const handleBoardDrop = useCallback(
+    async (taskId: string, newStatus: TaskStatus) => {
+      const task = tasks.find((t) => t.id === taskId);
+      if (!task || task.status === newStatus) return;
+      setDraggedTaskId(null);
+      setBoardDropTarget(null);
+      const result = await updateTask(projectId, taskId, { status: newStatus });
+      if (result.ok) {
+        setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t)));
+        router.refresh();
+      } else addToast(result.error, "error");
+    },
+    [projectId, tasks, router, addToast]
+  );
+
   const meetingLines = meetingPaste
     .split(/\n/)
     .map((s) => s.trim())
@@ -324,40 +345,75 @@ export function TasksClient({
         </div>
       </div>
 
-      {/* View filter + bulk toolbar */}
+      {/* View mode (List | Board) + filter (This week | All) + bulk toolbar */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "var(--space-3)" }}>
-        <div
-          role="tablist"
-          style={{
-            display: "inline-flex",
-            padding: "var(--space-0)",
-            borderRadius: "var(--radius-md)",
-            border: "1px solid var(--color-border)",
-            background: "var(--color-bg-muted)",
-          }}
-        >
-          {(["this_week", "all"] as const).map((view) => (
-            <button
-              key={view}
-              type="button"
-              role="tab"
-              aria-selected={viewFilter === view}
-              onClick={() => setViewFilter(view)}
-              style={{
-                padding: "var(--space-2) var(--space-4)",
-                fontSize: "var(--text-sm)",
-                fontWeight: "var(--font-medium)",
-                border: "none",
-                borderRadius: "var(--radius-sm)",
-                cursor: "pointer",
-                background: viewFilter === view ? "var(--color-bg-elevated)" : "transparent",
-                color: viewFilter === view ? "var(--color-text)" : "var(--color-text-muted)",
-                boxShadow: viewFilter === view ? "0 1px 2px rgba(0,0,0,0.05)" : "none",
-              }}
-            >
-              {view === "this_week" ? "This week" : "All tasks"}
-            </button>
-          ))}
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", flexWrap: "wrap" }}>
+          <div
+            role="tablist"
+            style={{
+              display: "inline-flex",
+              padding: "var(--space-0)",
+              borderRadius: "var(--radius-md)",
+              border: "1px solid var(--color-border)",
+              background: "var(--color-bg-muted)",
+            }}
+          >
+            {(["list", "board"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                role="tab"
+                aria-selected={viewMode === mode}
+                onClick={() => setViewMode(mode)}
+                style={{
+                  padding: "var(--space-2) var(--space-4)",
+                  fontSize: "var(--text-sm)",
+                  fontWeight: "var(--font-medium)",
+                  border: "none",
+                  borderRadius: "var(--radius-sm)",
+                  cursor: "pointer",
+                  background: viewMode === mode ? "var(--color-bg-elevated)" : "transparent",
+                  color: viewMode === mode ? "var(--color-text)" : "var(--color-text-muted)",
+                  boxShadow: viewMode === mode ? "0 1px 2px rgba(0,0,0,0.05)" : "none",
+                }}
+              >
+                {mode === "list" ? "List" : "Board"}
+              </button>
+            ))}
+          </div>
+          <div
+            role="tablist"
+            style={{
+              display: "inline-flex",
+              padding: "var(--space-0)",
+              borderRadius: "var(--radius-md)",
+              border: "1px solid var(--color-border)",
+              background: "var(--color-bg-muted)",
+            }}
+          >
+            {(["this_week", "all"] as const).map((view) => (
+              <button
+                key={view}
+                type="button"
+                role="tab"
+                aria-selected={viewFilter === view}
+                onClick={() => setViewFilter(view)}
+                style={{
+                  padding: "var(--space-2) var(--space-4)",
+                  fontSize: "var(--text-sm)",
+                  fontWeight: "var(--font-medium)",
+                  border: "none",
+                  borderRadius: "var(--radius-sm)",
+                  cursor: "pointer",
+                  background: viewFilter === view ? "var(--color-bg-elevated)" : "transparent",
+                  color: viewFilter === view ? "var(--color-text)" : "var(--color-text-muted)",
+                  boxShadow: viewFilter === view ? "0 1px 2px rgba(0,0,0,0.05)" : "none",
+                }}
+              >
+                {view === "this_week" ? "This week" : "All tasks"}
+              </button>
+            ))}
+          </div>
         </div>
         {selectedIds.size > 0 && (
           <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", flexWrap: "wrap" }}>
@@ -378,6 +434,36 @@ export function TasksClient({
             </Button>
           </div>
         )}
+        {selectedIds.size === 0 && selectedTaskId && (
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", flexWrap: "wrap" }}>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                const t = tasks.find((x) => x.id === selectedTaskId);
+                if (t) openEdit(t);
+              }}
+              disabled={submitting}
+              style={{ padding: "var(--space-1) var(--space-2)", fontSize: "var(--text-sm)" }}
+            >
+              Edit
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => setDeleteId(selectedTaskId)}
+              disabled={submitting}
+              style={{ padding: "var(--space-1) var(--space-2)", fontSize: "var(--text-sm)", color: "var(--color-error)" }}
+            >
+              Delete
+            </Button>
+            <button
+              type="button"
+              onClick={() => setSelectedTaskId(null)}
+              style={{ fontSize: "var(--text-sm)", color: "var(--color-text-muted)", background: "none", border: "none", cursor: "pointer" }}
+            >
+              Clear selection
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Single table: checkbox, quick-done, title, status, assignee, due, actions */}
@@ -391,6 +477,112 @@ export function TasksClient({
         <p style={{ margin: 0, padding: "var(--space-6)", fontSize: "var(--text-sm)", color: "var(--color-text-muted)", textAlign: "center" }}>
           {viewFilter === "this_week" ? "No tasks due this week. Switch to All tasks or add new ones." : "No tasks."}
         </p>
+      ) : viewMode === "board" ? (
+        <div style={{ display: "flex", gap: "var(--space-4)", overflowX: "auto", paddingBottom: "var(--space-2)" }}>
+          {(["todo", "in_progress", "done", "cancelled"] as const).map((status) => {
+            const columnTasks = displayedTasks.filter((t) => t.status === status);
+            const isDropTarget = boardDropTarget === status;
+            return (
+              <div
+                key={status}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                  setBoardDropTarget(status);
+                }}
+                onDragLeave={() => setBoardDropTarget(null)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setBoardDropTarget(null);
+                  const taskId = e.dataTransfer.getData("taskId");
+                  if (taskId) handleBoardDrop(taskId, status);
+                }}
+                style={{
+                  minWidth: 260,
+                  flex: "1 1 0",
+                  borderRadius: "var(--radius-lg)",
+                  border: "1px solid var(--color-border)",
+                  background: isDropTarget ? "var(--color-bg-muted)" : "var(--color-bg-elevated)",
+                  padding: "var(--space-3)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "var(--space-2)",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: "var(--text-sm)",
+                    fontWeight: "var(--font-semibold)",
+                    color: "var(--color-text-muted)",
+                    marginBottom: "var(--space-1)",
+                    ...STATUS_PILL_STYLE[status],
+                    padding: "var(--space-1) var(--space-2)",
+                    borderRadius: "var(--radius-sm)",
+                    alignSelf: "flex-start",
+                  }}
+                >
+                  {STATUS_LABELS[status]} ({columnTasks.length})
+                </div>
+                {columnTasks.map((t) => (
+                  <div
+                    key={t.id}
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData("taskId", t.id);
+                      e.dataTransfer.effectAllowed = "move";
+                      setDraggedTaskId(t.id);
+                    }}
+                    onDragEnd={() => setDraggedTaskId(null)}
+                    onClick={() => openEdit(t)}
+                    style={{
+                      padding: "var(--space-3)",
+                      borderRadius: "var(--radius-md)",
+                      border: "1px solid var(--color-border)",
+                      background: draggedTaskId === t.id ? "var(--color-bg-muted)" : "var(--color-bg)",
+                      cursor: draggedTaskId === t.id ? "grabbing" : "grab",
+                      opacity: draggedTaskId === t.id ? 0.6 : 1,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: "var(--space-2)" }}>
+                      <input
+                        type="radio"
+                        name="task-action-board"
+                        checked={selectedTaskId === t.id}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          setSelectedTaskId(t.id);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        aria-label={`Select ${t.title.slice(0, 30)}`}
+                        style={{ cursor: "pointer", marginTop: 2, flexShrink: 0 }}
+                      />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontWeight: "var(--font-medium)",
+                            fontSize: "var(--text-sm)",
+                            textDecoration: t.status === "done" ? "line-through" : "none",
+                            color: t.status === "done" ? "var(--color-text-muted)" : "var(--color-text)",
+                          }}
+                        >
+                          {t.title}
+                        </div>
+                        {t.source_meeting_label && (
+                          <div style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", marginTop: "var(--space-1)" }}>
+                            From: {t.source_meeting_label}
+                          </div>
+                        )}
+                        <div style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", marginTop: "var(--space-1)" }}>
+                          {t.assignee_name ?? "—"} · {formatDue(t.due_at)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
       ) : (
         <div
           style={{
@@ -415,10 +607,11 @@ export function TasksClient({
                 </TableHead>
                 <TableHead style={{ width: 40 }} />
                 <TableHead>Title</TableHead>
+                <TableHead style={{ minWidth: 140 }}>From meeting</TableHead>
                 <TableHead style={{ minWidth: 120 }}>Status</TableHead>
                 <TableHead style={{ minWidth: 120 }}>Assignee</TableHead>
                 <TableHead style={{ minWidth: 88 }}>Due</TableHead>
-                <TableHead style={{ width: 100 }} />
+                <TableHead style={{ width: 56 }} />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -464,6 +657,9 @@ export function TasksClient({
                     >
                       {t.title}
                     </span>
+                  </TableCell>
+                  <TableCell style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>
+                    {t.source_meeting_label ?? "—"}
                   </TableCell>
                   <TableCell>
                     <select
@@ -512,25 +708,15 @@ export function TasksClient({
                   <TableCell style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>
                     {formatDue(t.due_at)}
                   </TableCell>
-                  <TableCell>
-                    <div style={{ display: "flex", gap: "var(--space-1)" }}>
-                      <Button
-                        variant="secondary"
-                        onClick={() => openEdit(t)}
-                        disabled={submitting}
-                        style={{ padding: "var(--space-1) var(--space-2)", fontSize: "var(--text-xs)" }}
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        onClick={() => setDeleteId(t.id)}
-                        disabled={submitting}
-                        style={{ padding: "var(--space-1) var(--space-2)", fontSize: "var(--text-xs)", color: "var(--color-error)" }}
-                      >
-                        Delete
-                      </Button>
-                    </div>
+                  <TableCell style={{ paddingRight: "var(--space-3)" }}>
+                    <input
+                      type="radio"
+                      name="task-action-row"
+                      checked={selectedTaskId === t.id}
+                      onChange={() => setSelectedTaskId(t.id)}
+                      aria-label={`Select ${t.title.slice(0, 30)} for Edit or Delete`}
+                      style={{ cursor: "pointer", width: 16, height: 16 }}
+                    />
                   </TableCell>
                 </TableRow>
               ))}
@@ -649,6 +835,11 @@ export function TasksClient({
 
       <Dialog open={editOpen} onClose={() => !submitting && (setEditOpen(false), setEditing(null))} title="Edit task">
         <form onSubmit={handleEdit} style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+          {editing?.source_meeting_label && (
+            <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
+              From meeting: <strong style={{ color: "var(--color-text)" }}>{editing.source_meeting_label}</strong>
+            </p>
+          )}
           <label style={{ fontSize: "var(--text-sm)", fontWeight: "var(--font-medium)" }}>Title *</label>
           <Input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="Task title" required />
           <label style={{ fontSize: "var(--text-sm)", fontWeight: "var(--font-medium)" }}>Status</label>

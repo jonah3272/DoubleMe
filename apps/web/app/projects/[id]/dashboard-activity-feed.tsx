@@ -1,11 +1,8 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 
-type FeedItem =
-  | { type: "thread"; id: string; title: string; updated_at: string; threadId: string }
-  | { type: "artifact"; id: string; title: string; updated_at: string };
+type FeedItem = { type: "artifact"; id: string; title: string; updated_at: string };
 
 function formatRelative(iso: string): string {
   const d = new Date(iso);
@@ -28,80 +25,33 @@ export function DashboardActivityFeed({
   projectId: string;
   feedItems: FeedItem[];
 }) {
-  const [tab, setTab] = useState<"all" | "threads" | "artifacts">("all");
-  const filtered =
-    tab === "all"
-      ? feedItems
-      : tab === "threads"
-        ? feedItems.filter((i) => i.type === "thread")
-        : feedItems.filter((i) => i.type === "artifact");
-
-  const typeLabel = (item: FeedItem) => (item.type === "thread" ? "Conversation" : "Note");
-  const tabStyle = (active: boolean) => ({
-    padding: "var(--space-2) var(--space-3)",
-    fontSize: "var(--text-sm)",
-    fontWeight: "var(--font-medium)" as const,
-    color: active ? "var(--color-primary)" : "var(--color-text-muted)",
-    background: "none",
-    border: "none",
-    borderBottom: active ? "2px solid var(--color-primary)" : "2px solid transparent",
-    cursor: "pointer",
-    marginBottom: "-2px",
-  });
-
   return (
     <div style={{ minWidth: 0 }}>
       <p style={{ margin: "0 0 var(--space-3) 0", fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
-        Recent conversations and saved notes.
+        Recent notes.
       </p>
-      <div
+      <h2
         style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          flexWrap: "wrap",
-          gap: "var(--space-3)",
-          marginBottom: "var(--space-4)",
+          margin: "0 0 var(--space-4) 0",
+          fontSize: "var(--text-sm)",
+          fontWeight: "var(--font-semibold)",
+          color: "var(--color-text-muted)",
+          letterSpacing: "0.02em",
+          textTransform: "uppercase",
         }}
       >
-        <h2
-          style={{
-            margin: 0,
-            fontSize: "var(--text-sm)",
-            fontWeight: "var(--font-semibold)",
-            color: "var(--color-text-muted)",
-            letterSpacing: "0.02em",
-            textTransform: "uppercase",
-          }}
-        >
-          Activity
-        </h2>
-        <div style={{ display: "flex", gap: 0 }}>
-          <button type="button" className="dashboard-activity-tab" style={tabStyle(tab === "all")} onClick={() => setTab("all")}>
-            All
-          </button>
-          <button type="button" className="dashboard-activity-tab" style={tabStyle(tab === "threads")} onClick={() => setTab("threads")}>
-            Conversations
-          </button>
-          <button type="button" className="dashboard-activity-tab" style={tabStyle(tab === "artifacts")} onClick={() => setTab("artifacts")}>
-            Notes
-          </button>
-        </div>
-      </div>
-      {filtered.length === 0 ? (
+        Activity
+      </h2>
+      {feedItems.length === 0 ? (
         <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
-          {tab === "all" ? "No conversations or notes yet." : tab === "threads" ? "No conversations yet." : "No notes yet."}
+          No notes yet.
         </p>
       ) : (
         <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
-          {filtered.map((item) => (
+          {feedItems.map((item) => (
             <li key={item.id}>
               <Link
-                href={
-                  item.type === "thread"
-                    ? `/projects/${projectId}/threads/${item.threadId}`
-                    : `/projects/${projectId}/artifacts`
-                }
+                href={`/projects/${projectId}/artifacts`}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -120,14 +70,13 @@ export function DashboardActivityFeed({
                     flexShrink: 0,
                     padding: "2px 8px",
                     borderRadius: "var(--radius-md)",
-                    backgroundColor:
-                      item.type === "thread" ? "var(--color-primary-muted)" : "var(--color-bg-muted)",
+                    backgroundColor: "var(--color-bg-muted)",
                     fontSize: "var(--text-xs)",
                     fontWeight: "var(--font-medium)",
-                    color: item.type === "thread" ? "var(--color-primary)" : "var(--color-text-muted)",
+                    color: "var(--color-text-muted)",
                   }}
                 >
-                  {typeLabel(item)}
+                  Note
                 </span>
                 <span
                   style={{
@@ -153,12 +102,6 @@ export function DashboardActivityFeed({
       )}
       {feedItems.length > 0 && (
         <p style={{ margin: "var(--space-3) 0 0 0", fontSize: "var(--text-sm)" }}>
-          <Link
-            href={`/projects/${projectId}/threads`}
-            style={{ color: "var(--color-primary)", textDecoration: "none", marginRight: "var(--space-3)" }}
-          >
-            All conversations
-          </Link>
           <Link href={`/projects/${projectId}/artifacts`} style={{ color: "var(--color-primary)", textDecoration: "none" }}>
             All notes
           </Link>

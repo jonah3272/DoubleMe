@@ -7,7 +7,6 @@ export type ProjectToolId =
   | "meeting_notes"
   | "contacts"
   | "figma"
-  | "threads"
   | "granola";
 
 export interface ProjectTool {
@@ -51,13 +50,6 @@ export const PROJECT_TOOLS: ProjectTool[] = [
     description: "Link designs and ideate on Figma files from this workspace.",
     comingSoon: true,
     badge: "Later",
-  },
-  {
-    id: "threads",
-    agentKey: "threads",
-    name: "Threads",
-    description: "Conversations and artifacts for this project (notes, plans, summaries).",
-    comingSoon: false,
   },
   {
     id: "granola",

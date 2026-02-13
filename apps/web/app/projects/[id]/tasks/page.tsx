@@ -25,7 +25,7 @@ export default async function ProjectTasksPage({
   if (error || !project) notFound();
 
   const [{ data: tasksData }, { data: contactsData }] = await Promise.all([
-    supabase.from("tasks").select("id, title, status, assignee_id, due_at, notes").eq("project_id", id).order("updated_at", { ascending: false }).limit(100),
+    supabase.from("tasks").select("id, title, status, assignee_id, due_at, notes, source_meeting_label").eq("project_id", id).order("updated_at", { ascending: false }).limit(100),
     supabase.from("contacts").select("id, name").eq("project_id", id).order("name").limit(100),
   ]);
   const contacts = (contactsData ?? []).map((c) => ({ id: c.id, name: c.name }));
@@ -38,6 +38,7 @@ export default async function ProjectTasksPage({
     assignee_name: t.assignee_id ? contactMap[t.assignee_id] ?? null : null,
     due_at: t.due_at,
     notes: t.notes,
+    source_meeting_label: t.source_meeting_label ?? null,
   }));
 
   return (

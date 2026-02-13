@@ -23,11 +23,6 @@ const icons = {
       <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
     </svg>
   ),
-  threads: (
-    <svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-    </svg>
-  ),
   tasks: (
     <svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M9 11l3 3L22 4" />
@@ -63,7 +58,6 @@ export function ProjectSidebar({
   const base = `/projects/${projectId}`;
   const isOverview = pathname === base;
   const isSettings = pathname === `${base}/settings`;
-  const isThreads = pathname.startsWith(`${base}/threads`);
   const isTasks = pathname === `${base}/tasks`;
   const isArtifacts = pathname === `${base}/artifacts`;
   const isImportGranola = pathname.startsWith(`${base}/import/granola`);
@@ -166,10 +160,6 @@ export function ProjectSidebar({
         <Link href={base} style={isOverview ? navLinkActive : navLinkInactive} aria-current={isOverview ? "page" : undefined}>
           <span style={{ display: "flex", flexShrink: 0 }}>{icons.overview}</span>
           Overview
-        </Link>
-        <Link href={`${base}/threads`} style={isThreads ? navLinkActive : navLinkInactive} aria-current={isThreads ? "page" : undefined}>
-          <span style={{ display: "flex", flexShrink: 0 }}>{icons.threads}</span>
-          Conversations
         </Link>
         <Link href={`${base}/tasks`} style={isTasks ? navLinkActive : navLinkInactive} aria-current={isTasks ? "page" : undefined}>
           <span style={{ display: "flex", flexShrink: 0 }}>{icons.tasks}</span>

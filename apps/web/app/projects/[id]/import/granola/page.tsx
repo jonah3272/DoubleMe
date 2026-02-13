@@ -1,10 +1,15 @@
+import dynamic from "next/dynamic";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isValidProjectId } from "@/lib/validators";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { ProjectSidebar } from "../../project-sidebar";
-import { GranolaImportClient } from "./granola-import-client";
+
+const GranolaImportClient = dynamic(
+  () => import("./granola-import-client").then((m) => ({ default: m.GranolaImportClient })),
+  { ssr: true, loading: () => <div style={{ padding: "var(--space-8)", minHeight: 200, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-text-muted)", fontSize: "var(--text-sm)" }}>Loading…</div> }
+);
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +33,7 @@ export default async function GranolaImportPage({
     <AppShell sidebar={<ProjectSidebar projectId={id} projectName={project.name} />}>
       <PageHeader
         title="Import from Granola"
-        description="Load meetings from Granola, then use Kimi to normalise each transcript into a structured summary with key points and action items before importing to this project."
+        description="Load today's meetings (or expand the range), get AI summaries and action items, then import tasks and notes."
       />
       <div style={{ padding: "var(--space-8)", flex: 1, maxWidth: "52rem", margin: "0 auto", width: "100%" }}>
         <GranolaImportClient projectId={id} projectName={project.name} />

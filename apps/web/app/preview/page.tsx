@@ -51,16 +51,11 @@ export default function PreviewPage() {
           projectName={MOCK_PROJECT_NAME}
           tasksCount={3}
           contactsCount={2}
-          conversationsCount={2}
           artifactsCount={1}
           nextTasks={[
             { id: "t1", title: "Review design mockups", status: "in_progress", due_at: now.toISOString() },
             { id: "t2", title: "Sync with client", status: "todo", due_at: tomorrow },
             { id: "t3", title: "Ship v1 scope", status: "todo", due_at: nextWeek },
-          ]}
-          recentThreads={[
-            { id: "c1", title: "Sprint planning", updated_at: anHourAgo },
-            { id: "c2", title: "Architecture decisions", updated_at: yesterday },
           ]}
           recentArtifacts={[
             { id: "a1", title: "Kickoff meeting notes", updated_at: yesterday },

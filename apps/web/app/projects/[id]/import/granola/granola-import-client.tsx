@@ -33,6 +33,7 @@ export function GranolaImportClient({
   const [selectedListTool, setSelectedListTool] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [listFilter, setListFilter] = useState("");
+  const [dateRange, setDateRange] = useState<"today" | "week" | "all">("today");
   const [documents, setDocuments] = useState<GranolaDocument[]>([]);
   const [loadingTools, setLoadingTools] = useState(true);
   const [loadingList, setLoadingList] = useState(false);
@@ -89,6 +90,24 @@ export function GranolaImportClient({
     })();
   }, []);
 
+  function filterByDateRange(docs: GranolaDocument[], range: "today" | "week" | "all"): GranolaDocument[] {
+    if (range === "all") return docs;
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000 - 1);
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - now.getDay());
+    weekStart.setHours(0, 0, 0, 0);
+    return docs.filter((d) => {
+      const raw = d.created_at;
+      if (!raw) return range === "all";
+      const date = new Date(raw);
+      if (Number.isNaN(date.getTime())) return range === "all";
+      if (range === "today") return date >= todayStart && date <= todayEnd;
+      return date >= weekStart && date <= now;
+    });
+  }
+
   async function handleLoadMeetings() {
     if (!selectedListTool) return;
     setListError(null);
@@ -104,7 +123,9 @@ export function GranolaImportClient({
       setListDebug(result.debug ?? null);
       setListRawPreview(result.rawPreview ?? null);
       setExtractedWithKimi(result.extractedWithKimi ?? false);
-      if (result.documents.length > 0) setSelectedId(result.documents[0].id);
+      const byDate = filterByDateRange(result.documents, dateRange);
+      const first = byDate[0] ?? result.documents[0];
+      if (first) setSelectedId(first.id);
     } else {
       setListError(result.error);
       addToast(result.error, "error");
@@ -410,29 +431,68 @@ export function GranolaImportClient({
         </div>
 
         {documents.length > 0 && (() => {
+            const dateFiltered = filterByDateRange(documents, dateRange);
             const q = listFilter.trim().toLowerCase();
             const filtered = q
-              ? documents.filter(
+              ? dateFiltered.filter(
                   (d) =>
                     (d.title ?? "").toLowerCase().includes(q) ||
                     (d.id ?? "").toLowerCase().includes(q) ||
                     (d.created_at ?? "").toLowerCase().includes(q)
                 )
-              : documents;
+              : dateFiltered;
             return (
           <div style={{ marginTop: "var(--space-6)", maxWidth: "36rem" }}>
+            <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "var(--space-3)", marginBottom: "var(--space-3)" }}>
+              <span style={{ fontSize: "var(--text-sm)", fontWeight: "var(--font-medium)", color: "var(--color-text-muted)" }}>When:</span>
+              <div
+                role="tablist"
+                style={{
+                  display: "inline-flex",
+                  padding: 2,
+                  borderRadius: "var(--radius-md)",
+                  border: "1px solid var(--color-border)",
+                  background: "var(--color-bg-muted)",
+                }}
+              >
+                {(["today", "week", "all"] as const).map((range) => (
+                  <button
+                    key={range}
+                    type="button"
+                    role="tab"
+                    aria-selected={dateRange === range}
+                    onClick={() => setDateRange(range)}
+                    style={{
+                      padding: "var(--space-1) var(--space-3)",
+                      fontSize: "var(--text-sm)",
+                      fontWeight: "var(--font-medium)",
+                      border: "none",
+                      borderRadius: "var(--radius-sm)",
+                      cursor: "pointer",
+                      background: dateRange === range ? "var(--color-bg-elevated)" : "transparent",
+                      color: dateRange === range ? "var(--color-text)" : "var(--color-text-muted)",
+                      boxShadow: dateRange === range ? "0 1px 2px rgba(0,0,0,0.05)" : "none",
+                    }}
+                  >
+                    {range === "today" ? "Today" : range === "week" ? "This week" : "All"}
+                  </button>
+                ))}
+              </div>
+              <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>
+                {filtered.length === dateFiltered.length
+                  ? `${dateFiltered.length} of ${documents.length}`
+                  : `${filtered.length} of ${dateFiltered.length}`}
+              </span>
+            </div>
             <p style={{ margin: "0 0 var(--space-2) 0", fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
-              {filtered.length === documents.length
-                ? `${documents.length} meeting${documents.length === 1 ? "" : "s"}`
-                : `${filtered.length} of ${documents.length} meetings`}
-              {extractedWithKimi ? " (from Kimi)" : ""} — click one to load its summary.
+              {extractedWithKimi ? "From Kimi. " : ""}Click a meeting to load its summary.
             </p>
-            {documents.length > 5 && (
+            {(documents.length > 4 || listFilter) && (
               <input
                 type="text"
                 value={listFilter}
                 onChange={(e) => setListFilter(e.target.value)}
-                placeholder="Filter list by title, date, or id…"
+                placeholder="Search by title, date, or id…"
                 style={{
                   width: "100%",
                   marginBottom: "var(--space-3)",

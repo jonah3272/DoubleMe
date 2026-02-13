@@ -30,15 +30,12 @@ export default async function ProjectWorkspacePage({
   const [
     tasksRes,
     contactsRes,
-    convRes,
     artRes,
     { data: nextTasksData },
-    { data: recentConvs },
     { data: recentArtifacts },
   ] = await Promise.all([
     supabase.from("tasks").select("id", { count: "exact", head: true }).eq("project_id", id),
     supabase.from("contacts").select("id", { count: "exact", head: true }).eq("project_id", id),
-    supabase.from("conversations").select("id", { count: "exact", head: true }).eq("project_id", id),
     supabase.from("artifacts").select("id", { count: "exact", head: true }).eq("project_id", id),
     supabase
       .from("tasks")
@@ -47,12 +44,6 @@ export default async function ProjectWorkspacePage({
       .in("status", ["todo", "in_progress"])
       .order("due_at", { ascending: true, nullsFirst: false })
       .limit(10),
-    supabase
-      .from("conversations")
-      .select("id, title, updated_at")
-      .eq("project_id", id)
-      .order("updated_at", { ascending: false })
-      .limit(15),
     supabase
       .from("artifacts")
       .select("id, title, updated_at")
@@ -79,10 +70,8 @@ export default async function ProjectWorkspacePage({
   const figmaLinks = figmaRes.error ? [] : (figmaRes.data ?? []);
   const tasksCount = tasksRes.count ?? 0;
   const contactsCount = contactsRes.count ?? 0;
-  const conversationsCount = convRes.count ?? 0;
   const artifactsCount = artRes.count ?? 0;
   const nextTasks = nextTasksData ?? [];
-  const recentThreads = recentConvs ?? [];
   const recentArtifactsList = recentArtifacts ?? [];
 
   return (
@@ -105,10 +94,8 @@ export default async function ProjectWorkspacePage({
           projectName={project.name}
           tasksCount={tasksCount}
           contactsCount={contactsCount}
-          conversationsCount={conversationsCount}
           artifactsCount={artifactsCount}
           nextTasks={nextTasks}
-          recentThreads={recentThreads}
           recentArtifacts={recentArtifactsList}
           upcomingEvents={upcomingEvents}
           figmaLinks={figmaLinks}

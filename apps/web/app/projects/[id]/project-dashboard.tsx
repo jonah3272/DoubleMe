@@ -5,7 +5,6 @@ import { DashboardActivityFeed } from "./dashboard-activity-feed";
 const CHATGPT_URL = "https://chat.openai.com";
 
 type NextTask = { id: string; title: string; status: string; due_at: string | null };
-type FeedThread = { id: string; title: string | null; updated_at: string };
 type FeedArtifact = { id: string; title: string; updated_at: string };
 type UpcomingEvent = { id: string; title: string; start_at: string; end_at: string; link: string | null };
 type FigmaLink = { id: string; url: string; name: string };
@@ -15,10 +14,8 @@ type DashboardProps = {
   projectName: string;
   tasksCount: number;
   contactsCount: number;
-  conversationsCount: number;
   artifactsCount: number;
   nextTasks: NextTask[];
-  recentThreads: FeedThread[];
   recentArtifacts: FeedArtifact[];
   upcomingEvents: UpcomingEvent[];
   figmaLinks: FigmaLink[];
@@ -88,28 +85,12 @@ function groupTasksByDue(tasks: NextTask[]): { today: NextTask[]; thisWeek: Next
   return { today, thisWeek };
 }
 
-type FeedItem =
-  | { type: "thread"; id: string; title: string; updated_at: string; threadId: string }
-  | { type: "artifact"; id: string; title: string; updated_at: string };
+type FeedItem = { type: "artifact"; id: string; title: string; updated_at: string };
 
-function mergeFeed(threads: FeedThread[], artifacts: FeedArtifact[]): FeedItem[] {
-  const items: FeedItem[] = [
-    ...threads.map((t) => ({
-      type: "thread" as const,
-      id: `thread-${t.id}`,
-      title: t.title || "Thread",
-      updated_at: t.updated_at,
-      threadId: t.id,
-    })),
-    ...artifacts.map((a) => ({
-      type: "artifact" as const,
-      id: `artifact-${a.id}`,
-      title: a.title,
-      updated_at: a.updated_at,
-    })),
-  ];
-  items.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
-  return items.slice(0, 20);
+function mergeFeed(artifacts: FeedArtifact[]): FeedItem[] {
+  return artifacts
+    .slice(0, 20)
+    .map((a) => ({ type: "artifact" as const, id: `artifact-${a.id}`, title: a.title, updated_at: a.updated_at }));
 }
 
 export function ProjectDashboard({
@@ -117,15 +98,13 @@ export function ProjectDashboard({
   projectName,
   tasksCount,
   contactsCount,
-  conversationsCount,
   artifactsCount,
   nextTasks,
-  recentThreads,
   recentArtifacts,
   upcomingEvents,
   figmaLinks,
 }: DashboardProps) {
-  const feedItems = mergeFeed(recentThreads, recentArtifacts);
+  const feedItems = mergeFeed(recentArtifacts);
   const hasActivity = feedItems.length > 0;
   const { today: tasksToday, thisWeek: tasksThisWeek } = groupTasksByDue(nextTasks);
   const nextEventLabel =
@@ -164,7 +143,7 @@ export function ProjectDashboard({
         </p>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)" }}>
           <Link
-            href={`/projects/${projectId}/threads`}
+            href={`/projects/${projectId}/tasks`}
             className="dashboard-cta-primary"
             style={{
               display: "inline-flex",
@@ -182,10 +161,10 @@ export function ProjectDashboard({
               boxShadow: "var(--shadow-sm)",
             }}
           >
-            New thread
+            Add task
           </Link>
           <Link
-            href={`/projects/${projectId}/tasks`}
+            href={`/projects/${projectId}/artifacts`}
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -201,7 +180,7 @@ export function ProjectDashboard({
               textDecoration: "none",
             }}
           >
-            View tasks
+            Add note
           </Link>
         </div>
       </div>
@@ -218,16 +197,11 @@ export function ProjectDashboard({
       >
         <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)", lineHeight: 1.5 }}>
           <strong style={{ color: "var(--color-text)" }}>Tasks</strong> = to-dos.{" "}
-          <strong style={{ color: "var(--color-text)" }}>Threads</strong> = conversations &amp; decisions.{" "}
           <strong style={{ color: "var(--color-text)" }}>Notes</strong> = meeting notes &amp; docs.
         </p>
         <p style={{ margin: "var(--space-2) 0 0 0", fontSize: "var(--text-sm)" }}>
           <Link href={`/projects/${projectId}/tasks`} style={{ color: "var(--color-accent)", fontWeight: "var(--font-semibold)", textDecoration: "none" }}>
             {tasksCount} tasks
-          </Link>
-          {" · "}
-          <Link href={`/projects/${projectId}/threads`} style={{ color: "var(--color-accent)", fontWeight: "var(--font-semibold)", textDecoration: "none" }}>
-            {conversationsCount} threads
           </Link>
           {" · "}
           <Link href={`/projects/${projectId}/artifacts`} style={{ color: "var(--color-accent)", fontWeight: "var(--font-semibold)", textDecoration: "none" }}>
@@ -277,11 +251,11 @@ export function ProjectDashboard({
                     textAlign: "center",
                   }}
                 >
-                  No conversations or notes yet. Start a thread to capture decisions and context.
+                  No notes yet. Add meeting notes and docs from Notes or import from Granola.
                 </p>
                 <div style={{ marginTop: "var(--space-4)", display: "flex", justifyContent: "center" }}>
                   <Link
-                    href={`/projects/${projectId}/threads`}
+                    href={`/projects/${projectId}/artifacts`}
                     style={{
                       fontSize: "var(--text-sm)",
                       fontWeight: "var(--font-medium)",
@@ -289,7 +263,7 @@ export function ProjectDashboard({
                       textDecoration: "none",
                     }}
                   >
-                    New thread →
+                    Add note →
                   </Link>
                 </div>
               </CardContent>

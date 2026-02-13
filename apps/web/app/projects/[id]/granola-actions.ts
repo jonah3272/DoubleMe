@@ -282,9 +282,12 @@ export async function importFromGranolaIntoProject(
       const daysUntilFriday = dayOfWeek <= 5 ? 5 - dayOfWeek : 5 + (7 - dayOfWeek);
       const endOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysUntilFriday, 23, 59, 59).toISOString();
       const due_at = options.taskDueAt === "today" ? endOfToday : endOfWeek;
+      const sourceLabel = transcript.created_at
+        ? `${transcript.title} – ${new Date(transcript.created_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}`
+        : transcript.title;
 
       if (options.taskItems && options.taskItems.length > 0) {
-        const lines = options.taskItems.map((t) => ({ title: t.title.trim(), due_at, assignee_id: t.assignee_id || null }));
+        const lines = options.taskItems.map((t) => ({ title: t.title.trim(), due_at, assignee_id: t.assignee_id || null, source_meeting_label: sourceLabel }));
         const result = await createTasksFromLines(projectId, lines.filter((l) => l.title.length > 0));
         if (!result.ok) return { ok: false, error: result.error };
         tasksCreated = result.count;
@@ -307,6 +310,7 @@ export async function importFromGranolaIntoProject(
               title,
               due_at,
               assignee_id: ownerStr ? matchOwnerToContact(ownerStr, list) : null,
+              source_meeting_label: sourceLabel,
             };
           });
           const result = await createTasksFromLines(projectId, lines);
