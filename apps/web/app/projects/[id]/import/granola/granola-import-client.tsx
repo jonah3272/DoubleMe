@@ -12,7 +12,10 @@ import {
   synthesizeGranolaTranscriptAction,
   askKimiAboutTranscriptAction,
   importFromGranolaIntoProject,
+  getActionItemsWithSuggestedAssignees,
   type GranolaDocument,
+  type ActionItemWithSuggestedAssignee,
+  type ContactOption,
 } from "../../granola-actions";
 
 export function GranolaImportClient({
@@ -55,10 +58,21 @@ export function GranolaImportClient({
   const [taskDueAt, setTaskDueAt] = useState<"today" | "week">("week");
   const [submitting, setSubmitting] = useState(false);
 
+  const [taskPreviewItems, setTaskPreviewItems] = useState<ActionItemWithSuggestedAssignee[] | null>(null);
+  const [taskPreviewContacts, setTaskPreviewContacts] = useState<ContactOption[]>([]);
+  const [taskPreviewAssignees, setTaskPreviewAssignees] = useState<(string | null)[]>([]);
+  const [loadingTaskPreview, setLoadingTaskPreview] = useState(false);
+
   const [kimiQuery, setKimiQuery] = useState("");
   const [kimiResponse, setKimiResponse] = useState<string | null>(null);
   const [loadingKimi, setLoadingKimi] = useState(false);
   const [kimiError, setKimiError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setTaskPreviewItems(null);
+    setTaskPreviewContacts([]);
+    setTaskPreviewAssignees([]);
+  }, [synthesized]);
 
   useEffect(() => {
     (async () => {
@@ -187,6 +201,20 @@ export function GranolaImportClient({
     }
   }
 
+  async function loadTaskPreview() {
+    if (!synthesized?.trim()) return;
+    setLoadingTaskPreview(true);
+    const result = await getActionItemsWithSuggestedAssignees(projectId, synthesized);
+    setLoadingTaskPreview(false);
+    if (result.ok) {
+      setTaskPreviewItems(result.items);
+      setTaskPreviewContacts(result.contacts);
+      setTaskPreviewAssignees(result.items.map((i) => i.suggested_assignee_id));
+    } else {
+      addToast(result.error, "error");
+    }
+  }
+
   async function handleImport(e: React.FormEvent) {
     e.preventDefault();
     if (!selectedId) return;
@@ -195,11 +223,19 @@ export function GranolaImportClient({
       return;
     }
     setSubmitting(true);
+    const taskItems =
+      createTasks && taskPreviewItems && taskPreviewItems.length > 0
+        ? taskPreviewItems.map((item, i) => ({
+            title: item.title,
+            assignee_id: taskPreviewAssignees[i] ?? item.suggested_assignee_id,
+          }))
+        : undefined;
     const result = await importFromGranolaIntoProject(projectId, selectedId, {
       createTasks,
       createNote,
       taskDueAt: createTasks ? taskDueAt : undefined,
       synthesizedSummary: synthesized ?? undefined,
+      taskItems,
     });
     setSubmitting(false);
     if (result.ok) {
@@ -672,22 +708,93 @@ export function GranolaImportClient({
               Create tasks from action items
             </label>
             {createTasks && (
-              <div style={{ marginLeft: "var(--space-6)" }}>
-                <label style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", display: "block", marginBottom: "var(--space-1)" }}>Due</label>
-                <select
-                  value={taskDueAt}
-                  onChange={(e) => setTaskDueAt(e.target.value as "today" | "week")}
-                  style={{
-                    padding: "var(--space-2) var(--space-3)",
-                    borderRadius: "var(--radius-md)",
-                    border: "1px solid var(--color-border)",
-                    fontSize: "var(--text-sm)",
-                    backgroundColor: "var(--color-bg)",
-                  }}
-                >
-                  <option value="today">Today</option>
-                  <option value="week">End of week</option>
-                </select>
+              <div style={{ marginLeft: "var(--space-6)", display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+                <div>
+                  <label style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", display: "block", marginBottom: "var(--space-1)" }}>Due</label>
+                  <select
+                    value={taskDueAt}
+                    onChange={(e) => setTaskDueAt(e.target.value as "today" | "week")}
+                    style={{
+                      padding: "var(--space-2) var(--space-3)",
+                      borderRadius: "var(--radius-md)",
+                      border: "1px solid var(--color-border)",
+                      fontSize: "var(--text-sm)",
+                      backgroundColor: "var(--color-bg)",
+                    }}
+                  >
+                    <option value="today">Today</option>
+                    <option value="week">End of week</option>
+                  </select>
+                </div>
+                {synthesized?.trim() && (
+                  <>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={loadTaskPreview}
+                      disabled={loadingTaskPreview}
+                    >
+                      {loadingTaskPreview ? "Loading…" : taskPreviewItems ? "Refresh assignees" : "Preview tasks & assignees"}
+                    </Button>
+                    {taskPreviewItems && taskPreviewItems.length > 0 && (
+                      <div style={{ marginTop: "var(--space-2)" }}>
+                        <p style={{ margin: "0 0 var(--space-2) 0", fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>
+                          Assign each task; suggested from meeting. Override as needed.
+                        </p>
+                        <ul style={{ margin: 0, padding: 0, listStyle: "none", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", overflow: "hidden", maxHeight: "min(240px, 40vh)", overflowY: "auto" }}>
+                          {taskPreviewItems.map((item, i) => (
+                            <li
+                              key={i}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "var(--space-3)",
+                                padding: "var(--space-2) var(--space-3)",
+                                borderBottom: i < taskPreviewItems.length - 1 ? "1px solid var(--color-border)" : "none",
+                                background: "var(--color-bg)",
+                              }}
+                            >
+                              <span style={{ flex: 1, fontSize: "var(--text-sm)", minWidth: 0 }} title={item.title}>
+                                {item.title.slice(0, 60)}{item.title.length > 60 ? "…" : ""}
+                              </span>
+                              <select
+                                value={taskPreviewAssignees[i] ?? ""}
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  setTaskPreviewAssignees((prev) => {
+                                    const next = [...prev];
+                                    next[i] = v || null;
+                                    return next;
+                                  });
+                                }}
+                                style={{
+                                  padding: "var(--space-1) var(--space-2)",
+                                  borderRadius: "var(--radius-sm)",
+                                  border: "1px solid var(--color-border)",
+                                  fontSize: "var(--text-xs)",
+                                  backgroundColor: "var(--color-bg)",
+                                  minWidth: "8rem",
+                                }}
+                              >
+                                <option value="">No assignee</option>
+                                {taskPreviewContacts.map((c) => (
+                                  <option key={c.id} value={c.id}>
+                                    {c.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {taskPreviewItems && taskPreviewItems.length === 0 && (
+                      <p style={{ margin: "var(--space-2) 0 0 0", fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>
+                        No action items found in the summary.
+                      </p>
+                    )}
+                  </>
+                )}
               </div>
             )}
             <label style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", fontSize: "var(--text-sm)", cursor: "pointer" }}>

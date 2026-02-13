@@ -26,7 +26,7 @@ Include:
 1. **Summary** – 2–3 sentence overview.
 2. **Key points** – Bullet list of main discussion points.
 3. **Decisions** – Any decisions made.
-4. **Action items** – Clear to-dos with owners if mentioned (otherwise "Someone" or "Team").
+4. **Action items** – One bullet per task. When someone is assigned, use "**Name:** task" or "Name: task" so we can assign tasks to the right person (e.g. "- **Sam:** Follow up with client" or "- Jonah to review the doc"). If no owner is clear, use "Team" or just the task.
 5. **Next steps** – If mentioned.
 
 Keep the tone professional and concise. Use markdown headings (##) and bullets. Do not invent content that is not in the transcript.`;

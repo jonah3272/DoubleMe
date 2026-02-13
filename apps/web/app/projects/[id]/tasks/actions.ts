@@ -65,7 +65,7 @@ export type BulkCreateResult = { ok: true; count: number } | { ok: false; error:
 
 export async function createTasksFromLines(
   projectId: string,
-  lines: { title: string; due_at?: string | null }[]
+  lines: { title: string; due_at?: string | null; assignee_id?: string | null }[]
 ): Promise<BulkCreateResult> {
   if (!isValidProjectId(projectId)) return { ok: false, error: "Invalid project." };
   const user = await getCurrentUser();
@@ -79,7 +79,7 @@ export async function createTasksFromLines(
       project_id: projectId,
       title,
       status: "todo",
-      assignee_id: null,
+      assignee_id: line.assignee_id || null,
       due_at: line.due_at || null,
       notes: null,
     });

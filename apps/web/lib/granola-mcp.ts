@@ -651,3 +651,57 @@ export function parseActionItemsFromMarkdownSummary(content: string): string[] {
   // Fallback: same heuristic as transcript for any bullets in the doc
   return parseActionItemsFromTranscript(content);
 }
+
+export type ActionItemWithOwner = { title: string; owner?: string };
+
+/** Like parseActionItemsFromMarkdownSummary but keeps owner when present (e.g. "**Sam:** Follow up"). */
+export function parseActionItemsWithOwnersFromMarkdownSummary(content: string): ActionItemWithOwner[] {
+  const lines = content.split(/\n/);
+  const items: ActionItemWithOwner[] = [];
+  let inActionSection = false;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const isHeading = /^#{1,6}\s/.test(trimmed) || (trimmed.startsWith("**") && trimmed.endsWith("**"));
+    if (isHeading && /action\s*items?/i.test(trimmed)) {
+      inActionSection = true;
+      continue;
+    }
+    if (inActionSection) {
+      if (trimmed === "" || isHeading) inActionSection = false;
+      else {
+        const bullet = trimmed.replace(/^[-*•]\s*/, "").replace(/^\[\s*\]\s*/, "").replace(/^\d+\.\s*/, "").trim();
+        if (bullet.length < 3 || bullet.length > 500) continue;
+        // "**Owner:** task" or "**Owner** – task" or "**Owner**: task"
+        const boldColon = /^\*\*([^*]+)\*\*\s*[:\-–]\s*(.+)$/s.exec(bullet);
+        if (boldColon) {
+          items.push({ title: boldColon[2].trim(), owner: boldColon[1].trim() });
+          continue;
+        }
+        // "**Owner** task" (bold then space then rest)
+        const boldThen = /^\*\*([^*]+)\*\*\s+(.+)$/s.exec(bullet);
+        if (boldThen) {
+          items.push({ title: boldThen[2].trim(), owner: boldThen[1].trim() });
+          continue;
+        }
+        // "Owner: task"
+        const plainColon = /^([A-Za-z][A-Za-z0-9\s\-']+?)\s*:\s*(.+)$/s.exec(bullet);
+        if (plainColon) {
+          const owner = plainColon[1].trim();
+          if (owner.length <= 40) items.push({ title: plainColon[2].trim(), owner });
+          else items.push({ title: bullet });
+          continue;
+        }
+        // "Owner to do X" → optional: treat as owner + title
+        const toDo = /^([A-Za-z][A-Za-z0-9\s\-']+?)\s+to\s+(.+)$/i.exec(bullet);
+        if (toDo && toDo[1].trim().length <= 30) {
+          items.push({ title: toDo[2].trim(), owner: toDo[1].trim() });
+          continue;
+        }
+        items.push({ title: bullet });
+      }
+    }
+  }
+  if (items.length > 0) return items.slice(0, 50);
+  const fallback = parseActionItemsFromMarkdownSummary(content);
+  return fallback.map((t) => ({ title: t }));
+}

@@ -5,13 +5,14 @@ import {
   listGranolaMcpTools,
   getGranolaTranscriptFull,
   parseActionItemsFromTranscript,
-  parseActionItemsFromMarkdownSummary,
+  parseActionItemsWithOwnersFromMarkdownSummary,
 } from "@/lib/granola-mcp";
 import { synthesizeTranscriptWithKimi, extractMeetingsFromRawText, askKimiAboutData } from "@/lib/kimi";
 import { createTasksFromLines } from "./tasks/actions";
 import { createArtifact } from "./artifacts/actions";
 import { isValidProjectId } from "@/lib/validators";
 import { getCurrentUser } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import {
   buildGranolaAuthorizeUrl,
@@ -171,13 +172,86 @@ export async function askKimiAboutTranscriptAction(
   return askKimiAboutData(contextTitle, contextContent, userMessage);
 }
 
+/** Pick the closest contact for an owner string (e.g. from "**Sam:** do X"). Case-insensitive; prefers first-name match. */
+function matchOwnerToContact(
+  owner: string,
+  contacts: { id: string; name: string; email?: string | null }[]
+): string | null {
+  const q = owner.trim().toLowerCase();
+  if (!q) return null;
+  const byName = (c: { name: string }) => c.name.trim().toLowerCase();
+  const exact = contacts.find((c) => byName(c) === q);
+  if (exact) return exact.id;
+  const firstWord = q.split(/\s+/)[0];
+  const startsWith = contacts.find((c) => byName(c).startsWith(firstWord) || firstWord.length >= 2 && byName(c).includes(firstWord));
+  if (startsWith) return startsWith.id;
+  const includes = contacts.find((c) => byName(c).includes(q) || q.split(/\s+/).every((w) => w.length >= 2 && byName(c).includes(w)));
+  if (includes) return includes.id;
+  const emailMatch = contacts.find((c) => c.email && c.email.toLowerCase().startsWith(q));
+  if (emailMatch) return emailMatch.id;
+  return null;
+}
+
+export type TaskItemForImport = { title: string; assignee_id: string | null };
+
 export type ImportFromGranolaOptions = {
   createTasks: boolean;
   createNote: boolean;
   taskDueAt?: "today" | "week";
   /** When set, used as the note body (if createNote) and for task extraction (if createTasks) instead of raw transcript. */
   synthesizedSummary?: string;
+  /** When createTasks is true, use these instead of parsing from summary (allows preview + overwrite). */
+  taskItems?: TaskItemForImport[];
 };
+
+export type ActionItemWithSuggestedAssignee = {
+  title: string;
+  owner_from_summary: string | null;
+  suggested_assignee_id: string | null;
+  suggested_assignee_name: string | null;
+};
+
+export type ContactOption = { id: string; name: string };
+
+export type GetActionItemsWithSuggestedAssigneesResult =
+  | { ok: true; items: ActionItemWithSuggestedAssignee[]; contacts: ContactOption[] }
+  | { ok: false; error: string };
+
+/** Parse action items from the summary and suggest assignees by matching owner names to project contacts. */
+export async function getActionItemsWithSuggestedAssignees(
+  projectId: string,
+  synthesizedSummary: string
+): Promise<GetActionItemsWithSuggestedAssigneesResult> {
+  if (!isValidProjectId(projectId)) return { ok: false, error: "Invalid project." };
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+  const supabase = await createClient();
+  const { data: contacts } = await supabase
+    .from("contacts")
+    .select("id, name, email")
+    .eq("project_id", projectId)
+    .order("name")
+    .limit(100);
+  const list = contacts ?? [];
+  const items = parseActionItemsWithOwnersFromMarkdownSummary(synthesizedSummary.trim());
+  const result: ActionItemWithSuggestedAssignee[] = items.map((item) => {
+    const suggested_assignee_id = item.owner ? matchOwnerToContact(item.owner, list) : null;
+    const suggested_assignee_name = suggested_assignee_id
+      ? list.find((c) => c.id === suggested_assignee_id)?.name ?? null
+      : null;
+    return {
+      title: item.title,
+      owner_from_summary: item.owner ?? null,
+      suggested_assignee_id,
+      suggested_assignee_name,
+    };
+  });
+  return {
+    ok: true,
+    items: result,
+    contacts: list.map((c) => ({ id: c.id, name: c.name })),
+  };
+}
 
 export type ImportFromGranolaResult =
   | { ok: true; tasksCreated?: number; artifactId?: string }
@@ -195,25 +269,46 @@ export async function importFromGranolaIntoProject(
     return { ok: false, error: "Choose at least one: create tasks or save as note." };
 
   try {
+    const supabase = await createClient();
     const accessToken = await getGranolaAccessTokenForUser(user.id);
     const transcript = await getGranolaTranscriptFull(documentId, accessToken ?? undefined);
     let tasksCreated: number | undefined;
     let artifactId: string | undefined;
 
     if (options.createTasks) {
-      const titles = options.synthesizedSummary?.trim()
-        ? parseActionItemsFromMarkdownSummary(options.synthesizedSummary)
-        : parseActionItemsFromTranscript(transcript.content);
-      if (titles.length > 0) {
-        const now = new Date();
-        const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString();
-        const dayOfWeek = now.getDay();
-        const daysUntilFriday = dayOfWeek <= 5 ? 5 - dayOfWeek : 5 + (7 - dayOfWeek);
-        const endOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysUntilFriday, 23, 59, 59).toISOString();
-        const due_at = options.taskDueAt === "today" ? endOfToday : endOfWeek;
-        const result = await createTasksFromLines(projectId, titles.map((title) => ({ title, due_at })));
+      const now = new Date();
+      const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString();
+      const dayOfWeek = now.getDay();
+      const daysUntilFriday = dayOfWeek <= 5 ? 5 - dayOfWeek : 5 + (7 - dayOfWeek);
+      const endOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysUntilFriday, 23, 59, 59).toISOString();
+      const due_at = options.taskDueAt === "today" ? endOfToday : endOfWeek;
+
+      if (options.taskItems && options.taskItems.length > 0) {
+        const lines = options.taskItems.map((t) => ({ title: t.title.trim(), due_at, assignee_id: t.assignee_id || null }));
+        const result = await createTasksFromLines(projectId, lines.filter((l) => l.title.length > 0));
         if (!result.ok) return { ok: false, error: result.error };
         tasksCreated = result.count;
+      } else {
+        const items = options.synthesizedSummary?.trim()
+          ? parseActionItemsWithOwnersFromMarkdownSummary(options.synthesizedSummary)
+          : parseActionItemsFromTranscript(transcript.content).map((title) => ({ title }));
+        if (items.length > 0) {
+          const { data: contacts } = await supabase
+            .from("contacts")
+            .select("id, name, email")
+            .eq("project_id", projectId)
+            .order("name")
+            .limit(100);
+          const list = contacts ?? [];
+          const lines = items.map((item) => ({
+            title: "title" in item ? item.title : item,
+            due_at,
+            assignee_id: "owner" in item && item.owner ? matchOwnerToContact(item.owner, list) : null,
+          }));
+          const result = await createTasksFromLines(projectId, lines);
+          if (!result.ok) return { ok: false, error: result.error };
+          tasksCreated = result.count;
+        }
       }
     }
 
