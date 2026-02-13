@@ -100,9 +100,9 @@ export function GranolaImportClient({
     weekStart.setHours(0, 0, 0, 0);
     return docs.filter((d) => {
       const raw = d.created_at;
-      if (!raw) return range === "all";
+      if (!raw) return false;
       const date = new Date(raw);
-      if (Number.isNaN(date.getTime())) return range === "all";
+      if (Number.isNaN(date.getTime())) return false;
       if (range === "today") return date >= todayStart && date <= todayEnd;
       return date >= weekStart && date <= now;
     });
