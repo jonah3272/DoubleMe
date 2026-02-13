@@ -672,19 +672,19 @@ export function parseActionItemsWithOwnersFromMarkdownSummary(content: string): 
         const bullet = trimmed.replace(/^[-*•]\s*/, "").replace(/^\[\s*\]\s*/, "").replace(/^\d+\.\s*/, "").trim();
         if (bullet.length < 3 || bullet.length > 500) continue;
         // "**Owner:** task" or "**Owner** – task" or "**Owner**: task"
-        const boldColon = /^\*\*([^*]+)\*\*\s*[:\-–]\s*(.+)$/s.exec(bullet);
+        const boldColon = /^\*\*([^*]+)\*\*\s*[:\-–]\s*(.+)$/.exec(bullet);
         if (boldColon) {
           items.push({ title: boldColon[2].trim(), owner: boldColon[1].trim() });
           continue;
         }
         // "**Owner** task" (bold then space then rest)
-        const boldThen = /^\*\*([^*]+)\*\*\s+(.+)$/s.exec(bullet);
+        const boldThen = /^\*\*([^*]+)\*\*\s+(.+)$/.exec(bullet);
         if (boldThen) {
           items.push({ title: boldThen[2].trim(), owner: boldThen[1].trim() });
           continue;
         }
         // "Owner: task"
-        const plainColon = /^([A-Za-z][A-Za-z0-9\s\-']+?)\s*:\s*(.+)$/s.exec(bullet);
+        const plainColon = /^([A-Za-z][A-Za-z0-9\s\-']+?)\s*:\s*(.+)$/.exec(bullet);
         if (plainColon) {
           const owner = plainColon[1].trim();
           if (owner.length <= 40) items.push({ title: plainColon[2].trim(), owner });
