@@ -67,7 +67,6 @@ export function TasksClient({
   const [submitting, setSubmitting] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [viewFilter, setViewFilter] = useState<"today" | "this_week" | "this_month" | "all">("this_week");
   const [viewMode, setViewMode] = useState<"list" | "board">("list");
   const [boardCollapsed, setBoardCollapsed] = useState<Set<TaskStatus>>(new Set(["done", "cancelled"]));
@@ -458,12 +457,13 @@ export function TasksClient({
             </Button>
           </div>
         )}
-        {selectedIds.size === 0 && selectedTaskId && (
+        {selectedIds.size === 1 && (
           <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", flexWrap: "wrap" }}>
             <Button
               variant="secondary"
               onClick={() => {
-                const t = tasks.find((x) => x.id === selectedTaskId);
+                const id = Array.from(selectedIds)[0];
+                const t = tasks.find((x) => x.id === id);
                 if (t) openEdit(t);
               }}
               disabled={submitting}
@@ -473,7 +473,7 @@ export function TasksClient({
             </Button>
             <Button
               variant="secondary"
-              onClick={() => setDeleteId(selectedTaskId)}
+              onClick={() => setDeleteId(Array.from(selectedIds)[0])}
               disabled={submitting}
               style={{ padding: "var(--space-1) var(--space-2)", fontSize: "var(--text-sm)", color: "var(--color-error)" }}
             >
@@ -481,7 +481,7 @@ export function TasksClient({
             </Button>
             <button
               type="button"
-              onClick={() => setSelectedTaskId(null)}
+              onClick={() => setSelectedIds(new Set())}
               style={{ fontSize: "var(--text-sm)", color: "var(--color-text-muted)", background: "none", border: "none", cursor: "pointer" }}
             >
               Clear selection
@@ -619,12 +619,16 @@ export function TasksClient({
                   >
                     <div style={{ display: "flex", alignItems: "flex-start", gap: "var(--space-2)" }}>
                       <input
-                        type="radio"
-                        name="task-action-board"
-                        checked={selectedTaskId === t.id}
+                        type="checkbox"
+                        checked={selectedIds.has(t.id)}
                         onChange={(e) => {
                           e.stopPropagation();
-                          setSelectedTaskId(t.id);
+                          setSelectedIds((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(t.id)) next.delete(t.id);
+                            else next.add(t.id);
+                            return next;
+                          });
                         }}
                         onClick={(e) => e.stopPropagation()}
                         aria-label={`Select ${t.title.slice(0, 30)}`}
@@ -694,11 +698,9 @@ export function TasksClient({
                 </TableHead>
                 <TableHead style={{ width: 40 }} />
                 <TableHead>Title</TableHead>
-                <TableHead style={{ minWidth: 140 }}>From meeting</TableHead>
                 <TableHead style={{ minWidth: 120 }}>Status</TableHead>
                 <TableHead style={{ minWidth: 120 }}>Assignee</TableHead>
                 <TableHead style={{ minWidth: 88 }}>Due</TableHead>
-                <TableHead style={{ width: 56 }} />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -734,32 +736,33 @@ export function TasksClient({
                     />
                   </TableCell>
                   <TableCell>
-                    <span
-                      style={{
-                        fontWeight: "var(--font-medium)",
-                        fontSize: "var(--text-sm)",
-                        textDecoration: t.status === "done" ? "line-through" : "none",
-                        color: t.status === "done" ? "var(--color-text-muted)" : "var(--color-text)",
-                      }}
-                    >
-                      {t.title}
-                    </span>
-                  </TableCell>
-                  <TableCell style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>
-                    {t.source_meeting_label || t.source_meeting_id ? (
-                      t.source_meeting_id ? (
-                        <Link
-                          href={`/projects/${projectId}/import/granola?meeting=${encodeURIComponent(t.source_meeting_id)}`}
-                          style={{ color: "var(--color-accent)", textDecoration: "none" }}
-                        >
-                          {t.source_meeting_label ?? "View meeting context"}
-                        </Link>
-                      ) : (
-                        t.source_meeting_label ?? "—"
-                      )
-                    ) : (
-                      "—"
-                    )}
+                    <div>
+                      <span
+                        style={{
+                          fontWeight: "var(--font-medium)",
+                          fontSize: "var(--text-sm)",
+                          textDecoration: t.status === "done" ? "line-through" : "none",
+                          color: t.status === "done" ? "var(--color-text-muted)" : "var(--color-text)",
+                        }}
+                      >
+                        {t.title}
+                      </span>
+                      {(t.source_meeting_label || t.source_meeting_id) && (
+                        <div style={{ marginTop: "var(--space-1)", fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>
+                          From:{" "}
+                          {t.source_meeting_id ? (
+                            <Link
+                              href={`/projects/${projectId}/import/granola?meeting=${encodeURIComponent(t.source_meeting_id)}`}
+                              style={{ color: "var(--color-accent)", textDecoration: "none" }}
+                            >
+                              {t.source_meeting_label ?? "View meeting context"}
+                            </Link>
+                          ) : (
+                            t.source_meeting_label
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <select
@@ -807,16 +810,6 @@ export function TasksClient({
                   </TableCell>
                   <TableCell style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>
                     {formatDue(t.due_at)}
-                  </TableCell>
-                  <TableCell style={{ paddingRight: "var(--space-3)" }}>
-                    <input
-                      type="radio"
-                      name="task-action-row"
-                      checked={selectedTaskId === t.id}
-                      onChange={() => setSelectedTaskId(t.id)}
-                      aria-label={`Select ${t.title.slice(0, 30)} for Edit or Delete`}
-                      style={{ cursor: "pointer", width: 16, height: 16 }}
-                    />
                   </TableCell>
                 </TableRow>
               ))}
@@ -935,10 +928,10 @@ export function TasksClient({
 
       <Dialog open={editOpen} onClose={() => !submitting && (setEditOpen(false), setEditing(null))} title="Edit task">
         <form onSubmit={handleEdit} style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
-          {(editing?.source_meeting_label || editing?.source_meeting_id) && (
-            <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
-              From meeting:{" "}
-              {editing?.source_meeting_id ? (
+          <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
+            <strong style={{ color: "var(--color-text-subtle)" }}>From meeting:</strong>{" "}
+            {editing?.source_meeting_label || editing?.source_meeting_id ? (
+              editing?.source_meeting_id ? (
                 <Link
                   href={`/projects/${projectId}/import/granola?meeting=${encodeURIComponent(editing.source_meeting_id)}`}
                   style={{ color: "var(--color-accent)", fontWeight: "var(--font-medium)", textDecoration: "none" }}
@@ -946,10 +939,12 @@ export function TasksClient({
                   {editing.source_meeting_label ?? "View full context"}
                 </Link>
               ) : (
-                <strong style={{ color: "var(--color-text)" }}>{editing?.source_meeting_label}</strong>
-              )}
-            </p>
-          )}
+                <span style={{ color: "var(--color-text)" }}>{editing?.source_meeting_label}</span>
+              )
+            ) : (
+              <span style={{ color: "var(--color-text-subtle)" }}>Not from a meeting</span>
+            )}
+          </p>
           <label style={{ fontSize: "var(--text-sm)", fontWeight: "var(--font-medium)" }}>Title *</label>
           <Input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="Task title" required />
           <label style={{ fontSize: "var(--text-sm)", fontWeight: "var(--font-medium)" }}>Status</label>
