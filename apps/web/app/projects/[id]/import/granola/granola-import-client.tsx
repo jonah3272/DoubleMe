@@ -29,6 +29,7 @@ export function GranolaImportClient({
   const [listTools, setListTools] = useState<string[]>([]);
   const [selectedListTool, setSelectedListTool] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [listFilter, setListFilter] = useState("");
   const [documents, setDocuments] = useState<GranolaDocument[]>([]);
   const [loadingTools, setLoadingTools] = useState(true);
   const [loadingList, setLoadingList] = useState(false);
@@ -372,14 +373,54 @@ export function GranolaImportClient({
           )}
         </div>
 
-        {documents.length > 0 && (
+        {documents.length > 0 && (() => {
+            const q = listFilter.trim().toLowerCase();
+            const filtered = q
+              ? documents.filter(
+                  (d) =>
+                    (d.title ?? "").toLowerCase().includes(q) ||
+                    (d.id ?? "").toLowerCase().includes(q) ||
+                    (d.created_at ?? "").toLowerCase().includes(q)
+                )
+              : documents;
+            return (
           <div style={{ marginTop: "var(--space-6)", maxWidth: "36rem" }}>
-            <p style={{ margin: "0 0 var(--space-3) 0", fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
-              {documents.length} meeting{documents.length === 1 ? "" : "s"}
+            <p style={{ margin: "0 0 var(--space-2) 0", fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
+              {filtered.length === documents.length
+                ? `${documents.length} meeting${documents.length === 1 ? "" : "s"}`
+                : `${filtered.length} of ${documents.length} meetings`}
               {extractedWithKimi ? " (from Kimi)" : ""} — click one to load its summary.
             </p>
-            <ul style={{ margin: 0, padding: 0, listStyle: "none", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", overflow: "hidden" }}>
-              {documents.map((d, i) => {
+            {documents.length > 5 && (
+              <input
+                type="text"
+                value={listFilter}
+                onChange={(e) => setListFilter(e.target.value)}
+                placeholder="Filter list by title, date, or id…"
+                style={{
+                  width: "100%",
+                  marginBottom: "var(--space-3)",
+                  padding: "var(--space-2) var(--space-3)",
+                  borderRadius: "var(--radius-md)",
+                  border: "1px solid var(--color-border)",
+                  fontSize: "var(--text-sm)",
+                  backgroundColor: "var(--color-bg)",
+                }}
+              />
+            )}
+            <ul
+              style={{
+                margin: 0,
+                padding: 0,
+                listStyle: "none",
+                border: "1px solid var(--color-border)",
+                borderRadius: "var(--radius-md)",
+                overflow: "hidden",
+                maxHeight: "min(320px, 50vh)",
+                overflowY: "auto",
+              }}
+            >
+              {filtered.map((d, i) => {
                 const isSelected = selectedId === d.id;
                 return (
                   <li key={d.id}>
@@ -392,7 +433,7 @@ export function GranolaImportClient({
                         width: "100%",
                         padding: "var(--space-3) var(--space-4)",
                         border: "none",
-                        borderBottom: i < documents.length - 1 ? "1px solid var(--color-border)" : "none",
+                        borderBottom: i < filtered.length - 1 ? "1px solid var(--color-border)" : "none",
                         background: isSelected ? "var(--color-bg-muted)" : "var(--color-bg)",
                         textAlign: "left",
                         cursor: loadingTranscript ? "wait" : "pointer",
@@ -433,6 +474,8 @@ export function GranolaImportClient({
               <p style={{ margin: "var(--space-2) 0 0 0", fontSize: "var(--text-sm)", color: "var(--color-error)" }}>{transcriptError}</p>
             )}
           </div>
+            );
+          })()}
         )}
       </section>
 
