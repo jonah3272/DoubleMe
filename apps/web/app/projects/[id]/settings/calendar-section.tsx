@@ -3,7 +3,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Input, Dialog, EmptyState, useToast } from "@/components/ui";
-import { createCalendarEvent, deleteCalendarEvent } from "./calendar-actions";
+import {
+  createCalendarEvent,
+  deleteCalendarEvent,
+  getGoogleCalendarConnectUrl,
+  createGoogleCalendarMeeting,
+} from "./calendar-actions";
 
 export type CalendarEventRow = {
   id: string;
@@ -13,12 +18,28 @@ export type CalendarEventRow = {
   link: string | null;
 };
 
-export function CalendarSection({ projectId, initialEvents }: { projectId: string; initialEvents: CalendarEventRow[] }) {
+export function CalendarSection({
+  projectId,
+  initialEvents,
+  googleCalendarConnected = false,
+}: {
+  projectId: string;
+  initialEvents: CalendarEventRow[];
+  googleCalendarConnected?: boolean;
+}) {
   const [events, setEvents] = useState<CalendarEventRow[]>(initialEvents);
   const [addOpen, setAddOpen] = useState(false);
+  const [meetingOpen, setMeetingOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({ title: "", start_at: "", end_at: "", link: "" });
+  const [meetingForm, setMeetingForm] = useState({
+    title: "",
+    agenda: "",
+    participants: "",
+    start_at: "",
+    end_at: "",
+  });
   const { addToast } = useToast();
   const router = useRouter();
 
@@ -59,6 +80,51 @@ export function CalendarSection({ projectId, initialEvents }: { projectId: strin
     }
   };
 
+  const handleConnectGoogleCalendar = async () => {
+    const result = await getGoogleCalendarConnectUrl(`/projects/${projectId}/settings#calendar`);
+    if (result.ok) window.location.href = result.url;
+    else addToast(result.error, "error");
+  };
+
+  const handleCreateMeeting = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!meetingForm.title.trim() || !meetingForm.start_at || !meetingForm.end_at) return;
+    setSubmitting(true);
+    const attendees = meetingForm.participants
+      .split(/[\n,;]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const result = await createGoogleCalendarMeeting(projectId, {
+      title: meetingForm.title.trim(),
+      description: meetingForm.agenda.trim() || null,
+      start_at: meetingForm.start_at,
+      end_at: meetingForm.end_at,
+      attendees: attendees.length > 0 ? attendees : undefined,
+    });
+    setSubmitting(false);
+    if (result.ok) {
+      setMeetingOpen(false);
+      setMeetingForm({ title: "", agenda: "", participants: "", start_at: "", end_at: "" });
+      router.refresh();
+      addToast("Meeting created in Google Calendar.", "success");
+      if (result.localId) {
+        setEvents((prev) => [
+          ...prev,
+          {
+            id: result.localId,
+            title: meetingForm.title.trim(),
+            start_at: meetingForm.start_at,
+            end_at: meetingForm.end_at,
+            link: result.eventLink,
+          },
+        ]);
+      }
+      if (result.eventLink) window.open(result.eventLink, "_blank");
+    } else {
+      addToast(result.error, "error");
+    }
+  };
+
   const formatWhen = (start: string, end: string) => {
     const s = new Date(start);
     const e = new Date(end);
@@ -71,10 +137,24 @@ export function CalendarSection({ projectId, initialEvents }: { projectId: strin
     <div id="calendar" style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "var(--space-2)" }}>
         <h3 style={{ margin: 0, fontSize: "var(--text-base)", fontWeight: "var(--font-semibold)" }}>Calendar</h3>
-        <Button onClick={() => setAddOpen(true)}>Add event</Button>
+        <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap" }}>
+          {googleCalendarConnected && (
+            <Button variant="primary" onClick={() => setMeetingOpen(true)}>
+              Create meeting (Google)
+            </Button>
+          )}
+          {!googleCalendarConnected && (
+            <Button variant="secondary" onClick={handleConnectGoogleCalendar}>
+              Connect Google Calendar
+            </Button>
+          )}
+          <Button onClick={() => setAddOpen(true)}>Add event</Button>
+        </div>
       </div>
       <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
-        Add events manually. They'll show on the project overview. Connect Google or Outlook later for automatic sync.
+        {googleCalendarConnected
+          ? "Create meetings in your Google Calendar (with agenda and participants) or add local events below."
+          : "Connect Google Calendar to create meetings with agenda and participants. Or add events manually — they show on the project overview."}
       </p>
       {events.length === 0 ? (
         <EmptyState
@@ -111,6 +191,72 @@ export function CalendarSection({ projectId, initialEvents }: { projectId: strin
             ))}
         </ul>
       )}
+
+      <Dialog open={meetingOpen} onClose={() => !submitting && setMeetingOpen(false)} title="Create meeting in Google Calendar">
+        <form onSubmit={handleCreateMeeting} style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+          <label style={{ fontSize: "var(--text-sm)", fontWeight: "var(--font-medium)" }}>Title *</label>
+          <Input
+            value={meetingForm.title}
+            onChange={(e) => setMeetingForm((f) => ({ ...f, title: e.target.value }))}
+            placeholder="Meeting title"
+            required
+          />
+          <label style={{ fontSize: "var(--text-sm)", fontWeight: "var(--font-medium)" }}>Agenda (optional)</label>
+          <textarea
+            value={meetingForm.agenda}
+            onChange={(e) => setMeetingForm((f) => ({ ...f, agenda: e.target.value }))}
+            placeholder="What will you cover?"
+            rows={3}
+            style={{
+              width: "100%",
+              padding: "var(--space-2) var(--space-3)",
+              borderRadius: "var(--radius-md)",
+              border: "1px solid var(--color-border)",
+              fontSize: "var(--text-sm)",
+              fontFamily: "inherit",
+              resize: "vertical",
+            }}
+          />
+          <label style={{ fontSize: "var(--text-sm)", fontWeight: "var(--font-medium)" }}>Participants (optional)</label>
+          <textarea
+            value={meetingForm.participants}
+            onChange={(e) => setMeetingForm((f) => ({ ...f, participants: e.target.value }))}
+            placeholder="Comma- or newline-separated emails"
+            rows={2}
+            style={{
+              width: "100%",
+              padding: "var(--space-2) var(--space-3)",
+              borderRadius: "var(--radius-md)",
+              border: "1px solid var(--color-border)",
+              fontSize: "var(--text-sm)",
+              fontFamily: "inherit",
+              resize: "vertical",
+            }}
+          />
+          <label style={{ fontSize: "var(--text-sm)", fontWeight: "var(--font-medium)" }}>Start *</label>
+          <Input
+            type="datetime-local"
+            value={meetingForm.start_at}
+            onChange={(e) => setMeetingForm((f) => ({ ...f, start_at: e.target.value }))}
+            required
+          />
+          <label style={{ fontSize: "var(--text-sm)", fontWeight: "var(--font-medium)" }}>End *</label>
+          <Input
+            type="datetime-local"
+            value={meetingForm.end_at}
+            onChange={(e) => setMeetingForm((f) => ({ ...f, end_at: e.target.value }))}
+            required
+          />
+          <div style={{ display: "flex", gap: "var(--space-3)", justifyContent: "flex-end", marginTop: "var(--space-2)" }}>
+            <Button type="button" variant="secondary" onClick={() => setMeetingOpen(false)} disabled={submitting}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={submitting || !meetingForm.title.trim() || !meetingForm.start_at || !meetingForm.end_at}>
+              {submitting ? "Creating…" : "Create meeting"}
+            </Button>
+          </div>
+        </form>
+      </Dialog>
 
       <Dialog open={addOpen} onClose={() => !submitting && setAddOpen(false)} title="Add event">
         <form onSubmit={handleAdd} style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>

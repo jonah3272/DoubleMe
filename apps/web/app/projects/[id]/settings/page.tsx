@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isValidProjectId } from "@/lib/validators";
 import { getGranolaMcpUrlOptional } from "@/lib/env";
 import { getGranolaConnected } from "../granola-actions";
+import { getGoogleCalendarConnected } from "./calendar-actions";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { ProjectSidebar } from "../project-sidebar";
@@ -54,9 +55,12 @@ export default async function ProjectSettingsPage({
   const initialFigmaLinks = (figmaLinks ?? []).map((l) => ({ id: l.id, url: l.url, name: l.name }));
 
   let granolaConnected = false;
+  let googleCalendarConnected = false;
   try {
     const granolaResult = await getGranolaConnected();
     granolaConnected = granolaResult.ok && granolaResult.connected;
+    const gcalResult = await getGoogleCalendarConnected();
+    googleCalendarConnected = gcalResult.ok && gcalResult.connected;
   } catch {
     // Supabase or service role not configured
   }
@@ -73,7 +77,7 @@ export default async function ProjectSettingsPage({
         </div>
         <GranolaSection configured={!!getGranolaMcpUrlOptional()} connected={granolaConnected} />
         <TeammatesSection projectId={id} initialContacts={initialContacts} />
-        <CalendarSection projectId={id} initialEvents={initialEvents} />
+        <CalendarSection projectId={id} initialEvents={initialEvents} googleCalendarConnected={googleCalendarConnected} />
         <FigmaSection projectId={id} initialLinks={initialFigmaLinks} />
       </div>
     </AppShell>

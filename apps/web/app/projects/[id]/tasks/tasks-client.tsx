@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -18,6 +18,13 @@ import {
 } from "@/components/ui";
 import { createTask, updateTask, deleteTask, createTasksFromLines, type TaskStatus } from "./actions";
 import { FromGranolaTrigger } from "../from-granola-trigger";
+
+const STATUS_PILL_STYLE: Record<TaskStatus, React.CSSProperties> = {
+  todo: { background: "var(--color-bg-muted)", color: "var(--color-text-muted)" },
+  in_progress: { background: "rgba(59, 130, 246, 0.12)", color: "var(--color-accent)" },
+  done: { background: "var(--color-success-muted)", color: "var(--color-success)" },
+  cancelled: { background: "var(--color-bg-muted)", color: "var(--color-text-subtle)" },
+};
 
 export type TaskRow = {
   id: string;
@@ -57,6 +64,9 @@ export function TasksClient({
   const [editing, setEditing] = useState<TaskRow | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [viewFilter, setViewFilter] = useState<"this_week" | "all">("this_week");
+  const selectAllRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState({
     title: "",
     status: "todo" as TaskStatus,
@@ -206,6 +216,72 @@ export function TasksClient({
     }
   };
 
+  const displayedTasks = viewFilter === "this_week" ? dailyTasks : tasks;
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const selectAll = () => {
+    if (selectedIds.size === displayedTasks.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(displayedTasks.map((t) => t.id)));
+  };
+  const bulkSetStatus = useCallback(
+    async (status: TaskStatus) => {
+      const ids = Array.from(selectedIds);
+      if (ids.length === 0) return;
+      setSubmitting(true);
+      const results = await Promise.all(ids.map((id) => updateTask(projectId, id, { status })));
+      setSubmitting(false);
+      const failed = results.filter((r) => !r.ok);
+      if (failed.length > 0) addToast(`${failed.length} update(s) failed.`, "error");
+      else addToast(`${ids.length} task${ids.length === 1 ? "" : "s"} updated.`, "success");
+      setSelectedIds(new Set());
+      setTasks((prev) => prev.map((t) => (ids.includes(t.id) ? { ...t, status } : t)));
+      router.refresh();
+    },
+    [projectId, selectedIds, router, addToast]
+  );
+  const bulkDelete = useCallback(async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setSubmitting(true);
+    const results = await Promise.all(ids.map((id) => deleteTask(projectId, id)));
+    setSubmitting(false);
+    const failed = results.filter((r) => !r.ok);
+    if (failed.length > 0) addToast(`${failed.length} delete(s) failed.`, "error");
+    else addToast(`${ids.length} task${ids.length === 1 ? "" : "s"} deleted.`, "success");
+    setSelectedIds(new Set());
+    setTasks((prev) => prev.filter((t) => !ids.includes(t.id)));
+    router.refresh();
+  }, [projectId, selectedIds, router, addToast]);
+
+  const handleInlineStatusChange = async (taskId: string, status: TaskStatus) => {
+    const result = await updateTask(projectId, taskId, { status });
+    if (result.ok) {
+      setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status } : t)));
+      router.refresh();
+    } else addToast(result.error, "error");
+  };
+  const handleInlineAssigneeChange = async (taskId: string, assignee_id: string | null) => {
+    const result = await updateTask(projectId, taskId, { assignee_id });
+    if (result.ok) {
+      const assignee = contacts.find((c) => c.id === assignee_id);
+      setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, assignee_id, assignee_name: assignee?.name ?? null } : t)));
+      router.refresh();
+    } else addToast(result.error, "error");
+  };
+
+  useEffect(() => {
+    const el = selectAllRef.current;
+    if (!el) return;
+    const n = displayedTasks.length;
+    el.indeterminate = n > 0 && selectedIds.size > 0 && selectedIds.size < n;
+  }, [selectedIds.size, displayedTasks.length]);
+
   const meetingLines = meetingPaste
     .split(/\n/)
     .map((s) => s.trim())
@@ -232,11 +308,14 @@ export function TasksClient({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "var(--space-2)" }}>
-        <Link href={`/projects/${projectId}`} style={{ fontSize: "var(--text-sm)", color: "var(--color-text-muted)", textDecoration: "none" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "var(--space-3)" }}>
+        <Link
+          href={`/projects/${projectId}`}
+          style={{ fontSize: "var(--text-sm)", color: "var(--color-text-muted)", textDecoration: "none", fontWeight: 500 }}
+        >
           ← Overview
         </Link>
-        <div style={{ display: "flex", gap: "var(--space-2)" }}>
+        <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap" }}>
           <FromGranolaTrigger projectId={projectId} />
           <Button variant="secondary" onClick={() => setMeetingOpen(true)}>
             Add from meeting
@@ -245,108 +324,210 @@ export function TasksClient({
         </div>
       </div>
 
-      {/* Daily tasks – this week, cross off */}
-      <section>
-        <h2 style={{ margin: "0 0 var(--space-3) 0", fontSize: "var(--text-sm)", fontWeight: "var(--font-semibold)", color: "var(--color-text-muted)", letterSpacing: "0.02em", textTransform: "uppercase" }}>
-          This week
-        </h2>
-        {dailyTasks.length === 0 ? (
-          <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
-            No tasks due this week. Add tasks or paste from meeting notes above.
-          </p>
-        ) : (
-          <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
-            {dailyTasks.map((t) => (
-              <li
-                key={t.id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "var(--space-3)",
-                  padding: "var(--space-2) 0",
-                  borderBottom: "1px solid var(--color-border-subtle)",
-                }}
-              >
-                <button
-                  type="button"
-                  aria-label={t.status === "done" ? "Mark not done" : "Mark done"}
-                  onClick={() => handleToggleDone(t)}
-                  disabled={togglingId === t.id}
-                  style={{
-                    width: 20,
-                    height: 20,
-                    flexShrink: 0,
-                    borderRadius: "var(--radius-sm)",
-                    border: "2px solid var(--color-border)",
-                    backgroundColor: t.status === "done" ? "var(--color-primary)" : "transparent",
-                    cursor: togglingId === t.id ? "wait" : "pointer",
-                  }}
-                />
-                <span
-                  style={{
-                    flex: 1,
-                    fontSize: "var(--text-base)",
-                    textDecoration: t.status === "done" ? "line-through" : "none",
-                    color: t.status === "done" ? "var(--color-text-muted)" : "var(--color-text)",
-                  }}
-                >
-                  {t.title}
-                </span>
-                <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-subtle)" }}>{formatDue(t.due_at)}</span>
-              </li>
-            ))}
-          </ul>
+      {/* View filter + bulk toolbar */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "var(--space-3)" }}>
+        <div
+          role="tablist"
+          style={{
+            display: "inline-flex",
+            padding: "var(--space-0)",
+            borderRadius: "var(--radius-md)",
+            border: "1px solid var(--color-border)",
+            background: "var(--color-bg-muted)",
+          }}
+        >
+          {(["this_week", "all"] as const).map((view) => (
+            <button
+              key={view}
+              type="button"
+              role="tab"
+              aria-selected={viewFilter === view}
+              onClick={() => setViewFilter(view)}
+              style={{
+                padding: "var(--space-2) var(--space-4)",
+                fontSize: "var(--text-sm)",
+                fontWeight: "var(--font-medium)",
+                border: "none",
+                borderRadius: "var(--radius-sm)",
+                cursor: "pointer",
+                background: viewFilter === view ? "var(--color-bg-elevated)" : "transparent",
+                color: viewFilter === view ? "var(--color-text)" : "var(--color-text-muted)",
+                boxShadow: viewFilter === view ? "0 1px 2px rgba(0,0,0,0.05)" : "none",
+              }}
+            >
+              {view === "this_week" ? "This week" : "All tasks"}
+            </button>
+          ))}
+        </div>
+        {selectedIds.size > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", flexWrap: "wrap" }}>
+            <span style={{ fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
+              {selectedIds.size} selected
+            </span>
+            <Button variant="secondary" onClick={() => bulkSetStatus("done")} disabled={submitting}>
+              Mark done
+            </Button>
+            <Button variant="secondary" onClick={() => bulkSetStatus("todo")} disabled={submitting}>
+              Mark to do
+            </Button>
+            <Button variant="secondary" onClick={bulkDelete} disabled={submitting} style={{ color: "var(--color-error)" }}>
+              Delete
+            </Button>
+            <Button variant="secondary" onClick={() => setSelectedIds(new Set())} disabled={submitting}>
+              Clear
+            </Button>
+          </div>
         )}
-      </section>
+      </div>
 
-      {/* All tasks table */}
-      <section>
-        <h2 style={{ margin: "0 0 var(--space-3) 0", fontSize: "var(--text-sm)", fontWeight: "var(--font-semibold)", color: "var(--color-text-muted)", letterSpacing: "0.02em", textTransform: "uppercase" }}>
-          All tasks
-        </h2>
+      {/* Single table: checkbox, quick-done, title, status, assignee, due, actions */}
       {tasks.length === 0 ? (
         <EmptyState
           title="No tasks yet"
-          description="Add tasks and assign them to teammates from Settings."
+          description="Add tasks, paste from meeting notes, or import from Granola. Assign to teammates in Settings."
           action={<Button onClick={() => setAddOpen(true)}>Add task</Button>}
         />
+      ) : displayedTasks.length === 0 ? (
+        <p style={{ margin: 0, padding: "var(--space-6)", fontSize: "var(--text-sm)", color: "var(--color-text-muted)", textAlign: "center" }}>
+          {viewFilter === "this_week" ? "No tasks due this week. Switch to All tasks or add new ones." : "No tasks."}
+        </p>
       ) : (
-        <div style={{ overflowX: "auto", border: "1px solid var(--color-border)", borderRadius: "var(--radius-lg)" }}>
+        <div
+          style={{
+            overflowX: "auto",
+            border: "1px solid var(--color-border)",
+            borderRadius: "var(--radius-lg)",
+            background: "var(--color-bg-elevated)",
+          }}
+        >
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead style={{ width: 40, paddingLeft: "var(--space-3)" }}>
+                  <input
+                    ref={selectAllRef}
+                    type="checkbox"
+                    checked={displayedTasks.length > 0 && selectedIds.size === displayedTasks.length}
+                    onChange={selectAll}
+                    aria-label="Select all"
+                    style={{ cursor: "pointer", width: 16, height: 16 }}
+                  />
+                </TableHead>
+                <TableHead style={{ width: 40 }} />
                 <TableHead>Title</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Assignee</TableHead>
-                <TableHead>Due</TableHead>
-                <TableHead style={{ width: 120 }} />
+                <TableHead style={{ minWidth: 120 }}>Status</TableHead>
+                <TableHead style={{ minWidth: 120 }}>Assignee</TableHead>
+                <TableHead style={{ minWidth: 88 }}>Due</TableHead>
+                <TableHead style={{ width: 100 }} />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {tasks.map((t) => (
-                <TableRow key={t.id}>
-                  <TableCell style={{ fontWeight: "var(--font-medium)" }}>{t.title}</TableCell>
+              {displayedTasks.map((t) => (
+                <TableRow
+                  key={t.id}
+                  className="tasks-table-row"
+                >
+                  <TableCell style={{ paddingLeft: "var(--space-3)" }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(t.id)}
+                      onChange={() => toggleSelect(t.id)}
+                      aria-label={`Select ${t.title.slice(0, 30)}`}
+                      style={{ cursor: "pointer", width: 16, height: 16 }}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <button
+                      type="button"
+                      aria-label={t.status === "done" ? "Mark not done" : "Mark done"}
+                      onClick={() => handleToggleDone(t)}
+                      disabled={togglingId === t.id}
+                      style={{
+                        width: 18,
+                        height: 18,
+                        flexShrink: 0,
+                        borderRadius: "var(--radius-sm)",
+                        border: "2px solid var(--color-border)",
+                        backgroundColor: t.status === "done" ? "var(--color-success)" : "transparent",
+                        cursor: togglingId === t.id ? "wait" : "pointer",
+                      }}
+                    />
+                  </TableCell>
                   <TableCell>
                     <span
                       style={{
-                        fontSize: "var(--text-xs)",
-                        padding: "2px 8px",
-                        borderRadius: "var(--radius-sm)",
-                        backgroundColor: "var(--color-surface-elevated)",
-                        color: "var(--color-text-muted)",
+                        fontWeight: "var(--font-medium)",
+                        fontSize: "var(--text-sm)",
+                        textDecoration: t.status === "done" ? "line-through" : "none",
+                        color: t.status === "done" ? "var(--color-text-muted)" : "var(--color-text)",
                       }}
                     >
-                      {STATUS_LABELS[(t.status as TaskStatus) ?? "todo"] ?? t.status}
+                      {t.title}
                     </span>
                   </TableCell>
-                  <TableCell style={{ color: "var(--color-text-muted)" }}>{t.assignee_name ?? "—"}</TableCell>
-                  <TableCell style={{ color: "var(--color-text-muted)" }}>{formatDue(t.due_at)}</TableCell>
                   <TableCell>
-                    <div style={{ display: "flex", gap: "var(--space-2)" }}>
-                      <Button variant="secondary" onClick={() => openEdit(t)} disabled={submitting}>
+                    <select
+                      value={(t.status as TaskStatus) ?? "todo"}
+                      onChange={(e) => handleInlineStatusChange(t.id, e.target.value as TaskStatus)}
+                      style={{
+                        padding: "2px 6px",
+                        fontSize: "var(--text-xs)",
+                        borderRadius: "var(--radius-sm)",
+                        border: "1px solid var(--color-border)",
+                        background: "var(--color-bg)",
+                        cursor: "pointer",
+                        ...STATUS_PILL_STYLE[(t.status as TaskStatus) ?? "todo"],
+                      }}
+                    >
+                      {(Object.keys(STATUS_LABELS) as TaskStatus[]).map((s) => (
+                        <option key={s} value={s}>
+                          {STATUS_LABELS[s]}
+                        </option>
+                      ))}
+                    </select>
+                  </TableCell>
+                  <TableCell>
+                    <select
+                      value={t.assignee_id ?? ""}
+                      onChange={(e) => handleInlineAssigneeChange(t.id, e.target.value || null)}
+                      style={{
+                        padding: "2px 6px",
+                        fontSize: "var(--text-xs)",
+                        borderRadius: "var(--radius-sm)",
+                        border: "1px solid var(--color-border)",
+                        background: "var(--color-bg)",
+                        color: "var(--color-text-muted)",
+                        cursor: "pointer",
+                        minWidth: 90,
+                      }}
+                    >
+                      <option value="">—</option>
+                      {contacts.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </TableCell>
+                  <TableCell style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>
+                    {formatDue(t.due_at)}
+                  </TableCell>
+                  <TableCell>
+                    <div style={{ display: "flex", gap: "var(--space-1)" }}>
+                      <Button
+                        variant="secondary"
+                        onClick={() => openEdit(t)}
+                        disabled={submitting}
+                        style={{ padding: "var(--space-1) var(--space-2)", fontSize: "var(--text-xs)" }}
+                      >
                         Edit
                       </Button>
-                      <Button variant="secondary" onClick={() => setDeleteId(t.id)} disabled={submitting} style={{ color: "var(--color-error, #b91c1c)" }}>
+                      <Button
+                        variant="secondary"
+                        onClick={() => setDeleteId(t.id)}
+                        disabled={submitting}
+                        style={{ padding: "var(--space-1) var(--space-2)", fontSize: "var(--text-xs)", color: "var(--color-error)" }}
+                      >
                         Delete
                       </Button>
                     </div>
@@ -357,7 +538,6 @@ export function TasksClient({
           </Table>
         </div>
       )}
-      </section>
 
       <Dialog open={meetingOpen} onClose={() => !submitting && (setMeetingOpen(false), setMeetingPaste(""))} title="Add from meeting">
         <p style={{ margin: "0 0 var(--space-3) 0", fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
