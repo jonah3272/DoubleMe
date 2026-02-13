@@ -233,16 +233,16 @@ export async function listGranolaDocuments(
   if (!text) {
     const rawPreview =
       typeof callRes.result === "string"
-        ? callRes.result.slice(0, 800)
-        : JSON.stringify(callRes.result ?? {}).slice(0, 800);
+        ? callRes.result.slice(0, 4000)
+        : JSON.stringify(callRes.result ?? {}).slice(0, 4000);
     const debug =
       process.env.GRANOLA_DEBUG
-        ? `No text in response. Raw (first 800 chars): ${rawPreview}`
-        : `No text in MCP response. Tool: ${listTool}. Add GRANOLA_DEBUG=1 to .env.local and restart to see raw response.`;
+        ? `No text in response. Raw (first 800 chars): ${rawPreview.slice(0, 800)}`
+        : `No text in MCP response. Tool: ${listTool}. See raw response below.`;
     if (process.env.GRANOLA_DEBUG) {
       console.warn("[Granola MCP] list tool returned no text:", listTool, callRes.result);
     }
-    return { documents: [], debug };
+    return { documents: [], debug, rawPreview };
   }
 
   const raw = parseListResponse(text);
@@ -267,6 +267,8 @@ export async function listGranolaDocuments(
 /** Extract raw text from MCP tools/call result (content array or inline text). */
 function extractTextFromToolResult(result: unknown): string {
   if (result == null) return "";
+  // MCP may return the list as a top-level array
+  if (Array.isArray(result)) return JSON.stringify(result);
   const content = (result as { content?: { type?: string; text?: string; value?: string }[] })?.content;
   if (Array.isArray(content)) {
     const parts = content
@@ -295,6 +297,8 @@ function extractTextFromToolResult(result: unknown): string {
     ]) {
       if (Array.isArray(obj[key])) return JSON.stringify(result);
     }
+    // Last resort: stringify so we can try to parse or show raw
+    return JSON.stringify(result);
   }
   return "";
 }

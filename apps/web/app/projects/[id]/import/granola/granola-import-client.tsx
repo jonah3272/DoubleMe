@@ -32,6 +32,9 @@ export function GranolaImportClient({
   const [loadingTools, setLoadingTools] = useState(true);
   const [loadingList, setLoadingList] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
+  const [listFetched, setListFetched] = useState(false);
+  const [listDebug, setListDebug] = useState<string | null>(null);
+  const [listRawPreview, setListRawPreview] = useState<string | null>(null);
 
   const [selectedId, setSelectedId] = useState("");
   const [transcript, setTranscript] = useState<{ title: string; content: string; created_at?: string } | null>(null);
@@ -66,11 +69,16 @@ export function GranolaImportClient({
   async function handleLoadMeetings() {
     if (!selectedListTool) return;
     setListError(null);
+    setListDebug(null);
+    setListRawPreview(null);
     setLoadingList(true);
     const result = await listGranolaDocumentsForProject(selectedListTool, searchQuery || undefined);
     setLoadingList(false);
+    setListFetched(true);
     if (result.ok) {
       setDocuments(result.documents);
+      setListDebug(result.debug ?? null);
+      setListRawPreview(result.rawPreview ?? null);
       if (result.documents.length > 0) setSelectedId(result.documents[0].id);
     } else {
       setListError(result.error);
@@ -201,7 +209,7 @@ export function GranolaImportClient({
             </label>
             <select
               value={selectedListTool}
-              onChange={(e) => { setSelectedListTool(e.target.value); setListError(null); }}
+              onChange={(e) => { setSelectedListTool(e.target.value); setListError(null); setListFetched(false); setListDebug(null); setListRawPreview(null); }}
               style={{
                 width: "100%",
                 padding: "var(--space-2) var(--space-3)",
@@ -241,7 +249,61 @@ export function GranolaImportClient({
           {listError && (
             <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-error)" }}>{listError}</p>
           )}
+
+          {listFetched && documents.length === 0 && !listError && (
+            <div style={{ marginTop: "var(--space-4)" }}>
+              <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
+                No meetings found. The app received a response but couldn’t parse any meetings from it.
+              </p>
+              <p style={{ margin: "var(--space-2) 0 0 0", fontSize: "var(--text-xs)", color: "var(--color-text-muted)", lineHeight: 1.5 }}>
+                Try a different list tool or search. On the free Granola plan, only notes from the last 30 days are available. If the problem persists, check your connection in{" "}
+                <Link href={`/projects/${projectId}/settings#granola`} style={{ color: "var(--color-accent)", textDecoration: "none" }}>Settings → Granola MCP</Link>.
+              </p>
+              {listDebug && (
+                <p style={{ margin: "var(--space-2) 0 0 0", fontSize: "var(--text-xs)", color: "var(--color-text-subtle)", whiteSpace: "pre-wrap" }}>
+                  {listDebug}
+                </p>
+              )}
+              {listRawPreview && (
+                <div
+                  style={{
+                    marginTop: "var(--space-3)",
+                    padding: "var(--space-3)",
+                    background: "var(--color-bg-muted)",
+                    borderRadius: "var(--radius-md)",
+                    border: "1px solid var(--color-border)",
+                    fontSize: "var(--text-xs)",
+                    fontFamily: "monospace",
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-word",
+                    maxHeight: 320,
+                    overflow: "auto",
+                    color: "var(--color-text-muted)",
+                  }}
+                >
+                  <strong style={{ display: "block", marginBottom: "var(--space-2)", color: "var(--color-text)" }}>Raw response (first 4000 chars)</strong>
+                  {listRawPreview.startsWith("{") || listRawPreview.startsWith("[") ? (
+                    (() => {
+                      try {
+                        return JSON.stringify(JSON.parse(listRawPreview), null, 2);
+                      } catch {
+                        return listRawPreview;
+                      }
+                    })()
+                  ) : (
+                    listRawPreview
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
+
+        {listFetched && documents.length > 0 && (
+          <p style={{ margin: "var(--space-2) 0 0 0", fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
+            {documents.length} meeting{documents.length === 1 ? "" : "s"} loaded. Pick one and click Load transcript.
+          </p>
+        )}
 
         {documents.length > 0 && (
           <div style={{ marginTop: "var(--space-6)" }}>
@@ -336,7 +398,7 @@ export function GranolaImportClient({
               {!synthesized ? (
                 <div>
                   <p style={{ margin: "0 0 var(--space-3) 0", fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
-                    Use Kimi to turn this transcript into a clear summary with key points, decisions, and action items.
+                    <strong>Kimi</strong> normalises the raw transcript into a structured summary: key points, decisions, and action items. The normalised summary is used when you import (for the note and for task extraction).
                   </p>
                   <Button
                     type="button"

@@ -28,7 +28,7 @@ export default async function GranolaImportPage({
     <AppShell sidebar={<ProjectSidebar projectId={id} projectName={project.name} />}>
       <PageHeader
         title="Import from Granola"
-        description="Pick a meeting, review the summary, and add action items or save as a note."
+        description="Load meetings from Granola, then use Kimi to normalise each transcript into a structured summary with key points and action items before importing to this project."
       />
       <div style={{ padding: "var(--space-8)", flex: 1, maxWidth: "52rem", margin: "0 auto", width: "100%" }}>
         <GranolaImportClient projectId={id} projectName={project.name} />
