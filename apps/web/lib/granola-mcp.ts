@@ -114,7 +114,7 @@ export type GranolaDocument = {
   updated_at?: string;
 };
 
-/** Parse Granola XML-style list response: <meeting id="..." title="..." ...>. Works when list_meetings returns XML. */
+/** Parse Granola XML-style list response: <meeting id="..." title="..." date="...">. Works when list_meetings returns XML. */
 function parseMeetingsFromXmlLikeText(text: string): GranolaDocument[] {
   const meetings: GranolaDocument[] = [];
   const tagRegex = /<meeting\s+[^>]*>/gi;
@@ -123,9 +123,11 @@ function parseMeetingsFromXmlLikeText(text: string): GranolaDocument[] {
     const tag = match[0];
     const idMatch = /id=["']([^"']*)["']/i.exec(tag);
     const titleMatch = /title=["']([^"']*)["']/i.exec(tag);
+    const dateMatch = /date=["']([^"']*)["']/i.exec(tag);
     const id = idMatch?.[1]?.trim();
     const title = titleMatch?.[1]?.trim();
-    if (id) meetings.push({ id, title: title || id });
+    const dateStr = dateMatch?.[1]?.trim();
+    if (id) meetings.push({ id, title: title || id, created_at: dateStr || undefined });
   }
   return meetings;
 }

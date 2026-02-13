@@ -66,6 +66,7 @@ Then open **http://localhost:3000** in your browser.
 2. **Env for the web app** — create `apps/web/.env.local` (copy from `apps/web/.env.local.example`). At minimum you need Supabase so auth works:
    - `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` from your Supabase project.
    - Optional dev shortcut: set `AUTH_BYPASS=true`, `BYPASS_USER_ID=<uuid>`, and `BYPASS_EMAIL=...` (and `SUPABASE_SERVICE_ROLE_KEY`) to skip login; see the example file.
+   - **Vercel:** set the same variables in the project’s **Settings → Environment Variables** (e.g. `KIMI_API_KEY` for Import from Granola); then redeploy.
 
 3. **Start the server** (from repo root):
    ```bash

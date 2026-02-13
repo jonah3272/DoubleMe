@@ -97,7 +97,8 @@ export function GranolaImportClient({
   }
 
   async function handleLoadTranscript() {
-    if (!selectedId) return;
+    const id = selectedId;
+    if (!id) return;
     setTranscriptError(null);
     setTranscript(null);
     setSynthesized(null);
@@ -106,7 +107,7 @@ export function GranolaImportClient({
     setKimiResponse(null);
     setKimiError(null);
     setLoadingTranscript(true);
-    const result = await getGranolaTranscriptForProject(selectedId);
+    const result = await getGranolaTranscriptForProject(id);
     setLoadingTranscript(false);
     if (result.ok) {
       setTranscript({ title: result.title, content: result.content, created_at: result.created_at });
@@ -114,6 +115,44 @@ export function GranolaImportClient({
     } else {
       setTranscriptError(result.error);
       addToast(result.error, "error");
+    }
+  }
+
+  /** Click a meeting: load transcript and run Kimi summary, then show on page. */
+  async function handleSelectMeeting(documentId: string) {
+    setSelectedId(documentId);
+    setTranscriptError(null);
+    setTranscript(null);
+    setSynthesized(null);
+    setSynthesizeError(null);
+    setKimiQuery("");
+    setKimiResponse(null);
+    setKimiError(null);
+    setLoadingTranscript(true);
+    const transcriptResult = await getGranolaTranscriptForProject(documentId);
+    setLoadingTranscript(false);
+    if (!transcriptResult.ok) {
+      setTranscriptError(transcriptResult.error);
+      addToast(transcriptResult.error, "error");
+      return;
+    }
+    setTranscript({
+      title: transcriptResult.title,
+      content: transcriptResult.content,
+      created_at: transcriptResult.created_at,
+    });
+    setViewTab("summary");
+    setLoadingSynthesize(true);
+    const synResult = await synthesizeGranolaTranscriptAction(
+      transcriptResult.title,
+      transcriptResult.content
+    );
+    setLoadingSynthesize(false);
+    if (synResult.ok) {
+      setSynthesized(synResult.content);
+    } else {
+      setSynthesizeError(synResult.error);
+      addToast(synResult.error, "error");
     }
   }
 
@@ -337,7 +376,7 @@ export function GranolaImportClient({
           <div style={{ marginTop: "var(--space-6)", maxWidth: "36rem" }}>
             <p style={{ margin: "0 0 var(--space-3) 0", fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
               {documents.length} meeting{documents.length === 1 ? "" : "s"}
-              {extractedWithKimi ? " (from Kimi)" : ""} — select one to load its transcript.
+              {extractedWithKimi ? " (from Kimi)" : ""} — click one to load its summary.
             </p>
             <ul style={{ margin: 0, padding: 0, listStyle: "none", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", overflow: "hidden" }}>
               {documents.map((d, i) => {
@@ -346,7 +385,8 @@ export function GranolaImportClient({
                   <li key={d.id}>
                     <button
                       type="button"
-                      onClick={() => { setSelectedId(d.id); setTranscript(null); setSynthesized(null); }}
+                      onClick={() => handleSelectMeeting(d.id)}
+                      disabled={loadingTranscript}
                       style={{
                         display: "block",
                         width: "100%",
@@ -355,7 +395,7 @@ export function GranolaImportClient({
                         borderBottom: i < documents.length - 1 ? "1px solid var(--color-border)" : "none",
                         background: isSelected ? "var(--color-bg-muted)" : "var(--color-bg)",
                         textAlign: "left",
-                        cursor: "pointer",
+                        cursor: loadingTranscript ? "wait" : "pointer",
                         font: "inherit",
                         fontSize: "var(--text-sm)",
                         color: "var(--color-text)",
@@ -365,6 +405,11 @@ export function GranolaImportClient({
                       <span style={{ display: "block", fontWeight: isSelected ? "var(--font-semibold)" : "var(--font-medium)" }}>
                         {d.title ?? d.id}
                       </span>
+                      {d.created_at && (
+                        <span style={{ display: "block", marginTop: "var(--space-1)", fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>
+                          {d.created_at}
+                        </span>
+                      )}
                       {d.title && d.id !== d.title && (
                         <span style={{ display: "block", marginTop: "var(--space-1)", fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>
                           {d.id}
