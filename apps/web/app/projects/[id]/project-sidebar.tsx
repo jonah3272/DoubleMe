@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FromGranolaTrigger } from "./from-granola-trigger";
 
 const iconSize = 20;
 
@@ -67,6 +66,7 @@ export function ProjectSidebar({
   const isThreads = pathname.startsWith(`${base}/threads`);
   const isTasks = pathname === `${base}/tasks`;
   const isArtifacts = pathname === `${base}/artifacts`;
+  const isImportGranola = pathname.startsWith(`${base}/import/granola`);
 
   const navLinkBase = {
     display: "flex",
@@ -163,23 +163,23 @@ export function ProjectSidebar({
 
       {/* Main nav */}
       <nav style={{ display: "flex", flexDirection: "column", gap: "var(--space-1)" }} aria-label="Project navigation">
-        <Link href={base} style={isOverview ? navLinkActive : navLinkInactive}>
+        <Link href={base} style={isOverview ? navLinkActive : navLinkInactive} aria-current={isOverview ? "page" : undefined}>
           <span style={{ display: "flex", flexShrink: 0 }}>{icons.overview}</span>
           Overview
         </Link>
-        <Link href={`${base}/threads`} style={isThreads ? navLinkActive : navLinkInactive}>
+        <Link href={`${base}/threads`} style={isThreads ? navLinkActive : navLinkInactive} aria-current={isThreads ? "page" : undefined}>
           <span style={{ display: "flex", flexShrink: 0 }}>{icons.threads}</span>
           Conversations
         </Link>
-        <Link href={`${base}/tasks`} style={isTasks ? navLinkActive : navLinkInactive}>
+        <Link href={`${base}/tasks`} style={isTasks ? navLinkActive : navLinkInactive} aria-current={isTasks ? "page" : undefined}>
           <span style={{ display: "flex", flexShrink: 0 }}>{icons.tasks}</span>
           Tasks
         </Link>
-        <Link href={`${base}/artifacts`} style={isArtifacts ? navLinkActive : navLinkInactive}>
+        <Link href={`${base}/artifacts`} style={isArtifacts ? navLinkActive : navLinkInactive} aria-current={isArtifacts ? "page" : undefined}>
           <span style={{ display: "flex", flexShrink: 0 }}>{icons.artifacts}</span>
           Notes
         </Link>
-        <Link href={`${base}/settings`} style={isSettings ? navLinkActive : navLinkInactive}>
+        <Link href={`${base}/settings`} style={isSettings ? navLinkActive : navLinkInactive} aria-current={isSettings ? "page" : undefined}>
           <span style={{ display: "flex", flexShrink: 0 }}>{icons.settings}</span>
           Settings
         </Link>
@@ -206,24 +206,27 @@ export function ProjectSidebar({
         >
           Import
         </span>
-        <div
+        <Link
+          href={`/projects/${projectId}/import/granola`}
           style={{
-            marginTop: "var(--space-1)",
             display: "flex",
             alignItems: "center",
             gap: "var(--space-3)",
             padding: "var(--space-2) var(--space-3)",
             borderRadius: "var(--radius-md)",
-            color: "var(--color-text-muted)",
+            color: isImportGranola ? "var(--color-text)" : "var(--color-text-muted)",
+            backgroundColor: isImportGranola ? "var(--color-bg-muted)" : undefined,
             fontSize: "var(--text-sm)",
             fontWeight: "var(--font-medium)",
+            textDecoration: "none",
             transition: "background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out)",
           }}
           className="project-sidebar-granola-wrap"
+          aria-current={isImportGranola ? "page" : undefined}
         >
           <span style={{ display: "flex", flexShrink: 0 }}>{icons.granola}</span>
-          <FromGranolaTrigger projectId={projectId} variant="link" />
-        </div>
+          From Granola →
+        </Link>
       </div>
 
       <style>{`

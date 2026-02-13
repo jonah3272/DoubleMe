@@ -5,7 +5,9 @@ import {
   listGranolaMcpTools,
   getGranolaTranscriptFull,
   parseActionItemsFromTranscript,
+  parseActionItemsFromMarkdownSummary,
 } from "@/lib/granola-mcp";
+import { synthesizeTranscriptWithKimi } from "@/lib/kimi";
 import { createTasksFromLines } from "./tasks/actions";
 import { createArtifact } from "./artifacts/actions";
 import { isValidProjectId } from "@/lib/validators";
@@ -113,10 +115,44 @@ export async function listGranolaDocumentsForProject(listTool?: string, searchQu
   }
 }
 
+export type GetTranscriptResult =
+  | { ok: true; title: string; content: string; created_at?: string }
+  | { ok: false; error: string };
+
+/** Fetch a single meeting transcript by id (for the import page). */
+export async function getGranolaTranscriptForProject(documentId: string): Promise<GetTranscriptResult> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+  try {
+    const accessToken = await getGranolaAccessTokenForUser(user.id);
+    const transcript = await getGranolaTranscriptFull(documentId, accessToken ?? undefined);
+    return {
+      ok: true,
+      title: transcript.title,
+      content: transcript.content,
+      created_at: transcript.created_at,
+    };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Failed to load transcript.";
+    return { ok: false, error: message };
+  }
+}
+
+export type SynthesizeResult = { ok: true; content: string } | { ok: false; error: string };
+
+/** Synthesize transcript into a readable summary using Kimi. */
+export async function synthesizeGranolaTranscriptAction(title: string, rawContent: string): Promise<SynthesizeResult> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+  return synthesizeTranscriptWithKimi(title, rawContent);
+}
+
 export type ImportFromGranolaOptions = {
   createTasks: boolean;
   createNote: boolean;
   taskDueAt?: "today" | "week";
+  /** When set, used as the note body (if createNote) and for task extraction (if createTasks) instead of raw transcript. */
+  synthesizedSummary?: string;
 };
 
 export type ImportFromGranolaResult =
@@ -141,7 +177,9 @@ export async function importFromGranolaIntoProject(
     let artifactId: string | undefined;
 
     if (options.createTasks) {
-      const titles = parseActionItemsFromTranscript(transcript.content);
+      const titles = options.synthesizedSummary?.trim()
+        ? parseActionItemsFromMarkdownSummary(options.synthesizedSummary)
+        : parseActionItemsFromTranscript(transcript.content);
       if (titles.length > 0) {
         const now = new Date();
         const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString();
@@ -156,9 +194,10 @@ export async function importFromGranolaIntoProject(
     }
 
     if (options.createNote) {
+      const noteBody = options.synthesizedSummary?.trim() || transcript.content;
       const art = await createArtifact(projectId, {
         title: transcript.title,
-        body: transcript.content,
+        body: noteBody,
         artifact_type: "meeting_summary",
         occurred_at: transcript.created_at ?? null,
       });

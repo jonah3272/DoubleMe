@@ -597,3 +597,29 @@ export function parseActionItemsFromTranscript(content: string): string[] {
   }
   return [...new Set(items)].slice(0, 50);
 }
+
+/** Extract action items from a Kimi-style markdown summary (e.g. under "## Action items" or "**Action items**"). */
+export function parseActionItemsFromMarkdownSummary(content: string): string[] {
+  const lines = content.split(/\n/);
+  const items: string[] = [];
+  let inActionSection = false;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const isHeading = /^#{1,6}\s/.test(trimmed) || (trimmed.startsWith("**") && trimmed.endsWith("**"));
+    if (isHeading && /action\s*items?/i.test(trimmed)) {
+      inActionSection = true;
+      continue;
+    }
+    if (inActionSection) {
+      if (trimmed === "" || isHeading) inActionSection = false;
+      else {
+        const bullet = trimmed.replace(/^[-*•]\s*/, "").replace(/^\[\s*\]\s*/, "").replace(/^\d+\.\s*/, "");
+        const action = bullet.trim();
+        if (action.length > 2 && action.length < 500) items.push(action);
+      }
+    }
+  }
+  if (items.length > 0) return [...new Set(items)].slice(0, 50);
+  // Fallback: same heuristic as transcript for any bullets in the doc
+  return parseActionItemsFromTranscript(content);
+}

@@ -61,6 +61,11 @@ export function getGranolaApiTokenOptional(): string | undefined {
   return process.env.GRANOLA_API_TOKEN?.trim() || undefined;
 }
 
+/** Kimi (Moonshot) API key for synthesizing meeting content. Optional. */
+export function getKimiApiKeyOptional(): string | undefined {
+  return process.env.KIMI_API_KEY?.trim() || undefined;
+}
+
 /** App origin for OAuth redirect_uri (e.g. https://app.example.com). Optional. Always returns scheme + host only, no path. */
 export function getAppOriginOptional(): string | undefined {
   let url = (process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL || "").trim();

@@ -40,7 +40,7 @@ export default async function ProjectArtifactsPage({
 
   return (
     <AppShell sidebar={<ProjectSidebar projectId={id} projectName={project.name} />}>
-      <PageHeader title="Artifacts" description={`Notes, meeting summaries, and plans for ${project.name}`} />
+      <PageHeader title="Notes" description={`Notes, meeting summaries, and plans for ${project.name}`} />
       <div style={{ padding: "var(--space-8)", maxWidth: "56rem" }}>
         <ArtifactsClient projectId={id} initialArtifacts={initialArtifacts} />
       </div>

@@ -135,13 +135,13 @@ export function ArtifactsClient({ projectId, initialArtifacts }: { projectId: st
         <Link href={`/projects/${projectId}`} style={{ fontSize: "var(--text-sm)", color: "var(--color-text-muted)", textDecoration: "none" }}>
           ← Overview
         </Link>
-        <Button onClick={() => setAddOpen(true)}>Add artifact</Button>
+        <Button onClick={() => setAddOpen(true)}>Add note</Button>
       </div>
       {artifacts.length === 0 ? (
         <EmptyState
-          title="No artifacts yet"
+          title="No notes yet"
           description="Add notes, meeting summaries, plans, or design links."
-          action={<Button onClick={() => setAddOpen(true)}>Add artifact</Button>}
+          action={<Button onClick={() => setAddOpen(true)}>Add note</Button>}
         />
       ) : (
         <div style={{ overflowX: "auto", border: "1px solid var(--color-border)", borderRadius: "var(--radius-lg)" }}>
@@ -191,7 +191,7 @@ export function ArtifactsClient({ projectId, initialArtifacts }: { projectId: st
         </div>
       )}
 
-      <Dialog open={addOpen} onClose={() => !submitting && setAddOpen(false)} title="Add artifact">
+      <Dialog open={addOpen} onClose={() => !submitting && setAddOpen(false)} title="Add note">
         <form onSubmit={handleAdd} style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
           <label style={{ fontSize: "var(--text-sm)", fontWeight: "var(--font-medium)" }}>Title *</label>
           <Input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="Title" required />
@@ -240,7 +240,7 @@ export function ArtifactsClient({ projectId, initialArtifacts }: { projectId: st
         </form>
       </Dialog>
 
-      <Dialog open={editOpen} onClose={() => !submitting && (setEditOpen(false), setEditing(null))} title="Edit artifact">
+      <Dialog open={editOpen} onClose={() => !submitting && (setEditOpen(false), setEditing(null))} title="Edit note">
         <form onSubmit={handleEdit} style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
           <label style={{ fontSize: "var(--text-sm)", fontWeight: "var(--font-medium)" }}>Title *</label>
           <Input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="Title" required />
@@ -289,9 +289,9 @@ export function ArtifactsClient({ projectId, initialArtifacts }: { projectId: st
         </form>
       </Dialog>
 
-      <Dialog open={deleteId !== null} onClose={() => !submitting && setDeleteId(null)} title="Delete artifact">
+      <Dialog open={deleteId !== null} onClose={() => !submitting && setDeleteId(null)} title="Delete note">
         <p style={{ margin: "0 0 var(--space-4) 0", fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
-          Delete &quot;{artifacts.find((a) => a.id === deleteId)?.title ?? "this artifact"}&quot;?
+          Delete &quot;{artifacts.find((a) => a.id === deleteId)?.title ?? "this note"}&quot;?
         </p>
         <div style={{ display: "flex", gap: "var(--space-3)", justifyContent: "flex-end" }}>
           <Button type="button" variant="secondary" onClick={() => setDeleteId(null)} disabled={submitting}>
