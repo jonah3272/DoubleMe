@@ -146,3 +146,56 @@ export async function extractMeetingsFromRawText(rawText: string): Promise<Extra
     return { ok: false, error: message };
   }
 }
+
+const ASK_DATA_SYSTEM = `You are a helpful assistant. You will be given a block of data (e.g. meeting transcript or list) and the user's question. Answer based only on the provided data. Be concise. Do not invent or assume information that is not in the data. If the data does not contain enough to answer, say so.`;
+
+/** Send a user message to Kimi with context data; returns Kimi's reply. */
+export async function askKimiAboutData(
+  contextTitle: string,
+  contextContent: string,
+  userMessage: string
+): Promise<SynthesizeResult> {
+  const apiKey = getKimiApiKeyOptional();
+  if (!apiKey) {
+    return { ok: false, error: "KIMI_API_KEY is not set. Add it to .env (or .env.local) to use this." };
+  }
+
+  const truncated = contextContent.slice(0, 40000);
+  const userContent = `Data: ${contextTitle}\n\n${truncated}\n\n---\n\nUser question: ${userMessage.trim()}`;
+
+  try {
+    const res = await fetch(`${KIMI_API_BASE}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        messages: [
+          { role: "system", content: ASK_DATA_SYSTEM },
+          { role: "user", content: userContent },
+        ],
+        temperature: 0.3,
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      return { ok: false, error: `Kimi API: ${res.status} ${err.slice(0, 200)}` };
+    }
+
+    const data = (await res.json()) as {
+      choices?: { message?: { content?: string } }[];
+      error?: { message?: string };
+    };
+    const content = data.choices?.[0]?.message?.content?.trim();
+    if (data.error?.message) return { ok: false, error: data.error.message };
+    if (!content) return { ok: false, error: "Empty response from Kimi." };
+
+    return { ok: true, content };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Kimi request failed.";
+    return { ok: false, error: message };
+  }
+}

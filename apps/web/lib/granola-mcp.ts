@@ -114,6 +114,22 @@ export type GranolaDocument = {
   updated_at?: string;
 };
 
+/** Parse Granola XML-style list response: <meeting id="..." title="..." ...>. Works when list_meetings returns XML. */
+function parseMeetingsFromXmlLikeText(text: string): GranolaDocument[] {
+  const meetings: GranolaDocument[] = [];
+  const tagRegex = /<meeting\s+[^>]*>/gi;
+  let match;
+  while ((match = tagRegex.exec(text)) !== null) {
+    const tag = match[0];
+    const idMatch = /id=["']([^"']*)["']/i.exec(tag);
+    const titleMatch = /title=["']([^"']*)["']/i.exec(tag);
+    const id = idMatch?.[1]?.trim();
+    const title = titleMatch?.[1]?.trim();
+    if (id) meetings.push({ id, title: title || id });
+  }
+  return meetings;
+}
+
 /** Tool names that can list meetings/documents (in preference order). */
 const LIST_TOOL_PRIORITY = [
   "search_meetings",
@@ -245,10 +261,15 @@ export async function listGranolaDocuments(
     return { documents: [], debug, rawPreview };
   }
 
-  const raw = parseListResponse(text);
-  const documents = raw
+  let raw = parseListResponse(text);
+  let documents = raw
     .map(normalizeGranolaDocument)
     .filter((d) => d.id && String(d.id).trim() !== "");
+
+  if (documents.length === 0 && /<meeting\s/i.test(text)) {
+    const xmlDocs = parseMeetingsFromXmlLikeText(text);
+    if (xmlDocs.length > 0) documents = xmlDocs;
+  }
 
   const alwaysDebugWhenEmpty =
     documents.length === 0

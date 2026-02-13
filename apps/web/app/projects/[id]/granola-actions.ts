@@ -7,7 +7,7 @@ import {
   parseActionItemsFromTranscript,
   parseActionItemsFromMarkdownSummary,
 } from "@/lib/granola-mcp";
-import { synthesizeTranscriptWithKimi, extractMeetingsFromRawText } from "@/lib/kimi";
+import { synthesizeTranscriptWithKimi, extractMeetingsFromRawText, askKimiAboutData } from "@/lib/kimi";
 import { createTasksFromLines } from "./tasks/actions";
 import { createArtifact } from "./artifacts/actions";
 import { isValidProjectId } from "@/lib/validators";
@@ -158,6 +158,17 @@ export async function synthesizeGranolaTranscriptAction(title: string, rawConten
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Not signed in." };
   return synthesizeTranscriptWithKimi(title, rawContent);
+}
+
+/** Ask Kimi a question about the given data (e.g. transcript); returns Kimi's reply. */
+export async function askKimiAboutTranscriptAction(
+  contextTitle: string,
+  contextContent: string,
+  userMessage: string
+): Promise<SynthesizeResult> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+  return askKimiAboutData(contextTitle, contextContent, userMessage);
 }
 
 export type ImportFromGranolaOptions = {

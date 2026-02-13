@@ -10,6 +10,7 @@ import {
   listGranolaDocumentsForProject,
   getGranolaTranscriptForProject,
   synthesizeGranolaTranscriptAction,
+  askKimiAboutTranscriptAction,
   importFromGranolaIntoProject,
   type GranolaDocument,
 } from "../../granola-actions";
@@ -52,6 +53,11 @@ export function GranolaImportClient({
   const [createNote, setCreateNote] = useState(true);
   const [taskDueAt, setTaskDueAt] = useState<"today" | "week">("week");
   const [submitting, setSubmitting] = useState(false);
+
+  const [kimiQuery, setKimiQuery] = useState("");
+  const [kimiResponse, setKimiResponse] = useState<string | null>(null);
+  const [loadingKimi, setLoadingKimi] = useState(false);
+  const [kimiError, setKimiError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -96,6 +102,9 @@ export function GranolaImportClient({
     setTranscript(null);
     setSynthesized(null);
     setSynthesizeError(null);
+    setKimiQuery("");
+    setKimiResponse(null);
+    setKimiError(null);
     setLoadingTranscript(true);
     const result = await getGranolaTranscriptForProject(selectedId);
     setLoadingTranscript(false);
@@ -119,6 +128,21 @@ export function GranolaImportClient({
       setViewTab("summary");
     } else {
       setSynthesizeError(result.error);
+      addToast(result.error, "error");
+    }
+  }
+
+  async function handleAskKimi(e: React.FormEvent) {
+    e.preventDefault();
+    if (!transcript || !kimiQuery.trim()) return;
+    setKimiError(null);
+    setLoadingKimi(true);
+    const result = await askKimiAboutTranscriptAction(transcript.title, transcript.content, kimiQuery.trim());
+    setLoadingKimi(false);
+    if (result.ok) {
+      setKimiResponse(result.content);
+    } else {
+      setKimiError(result.error);
       addToast(result.error, "error");
     }
   }
@@ -482,6 +506,57 @@ export function GranolaImportClient({
               {transcript.content}
             </div>
           )}
+
+          <div style={{ marginTop: "var(--space-6)", paddingTop: "var(--space-6)", borderTop: "1px solid var(--color-border)" }}>
+            <h3 style={{ margin: "0 0 var(--space-3) 0", fontSize: "var(--text-sm)", fontWeight: "var(--font-semibold)", color: "var(--color-text)" }}>
+              Talk to Kimi
+            </h3>
+            <p style={{ margin: "0 0 var(--space-3) 0", fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
+              Ask a question about this transcript. Kimi will answer using only the loaded data.
+            </p>
+            <form onSubmit={handleAskKimi} style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+              <textarea
+                value={kimiQuery}
+                onChange={(e) => setKimiQuery(e.target.value)}
+                placeholder="e.g. What were the action items? Summarise for the client."
+                rows={3}
+                disabled={loadingKimi}
+                style={{
+                  width: "100%",
+                  padding: "var(--space-3)",
+                  borderRadius: "var(--radius-md)",
+                  border: "1px solid var(--color-border)",
+                  fontSize: "var(--text-sm)",
+                  fontFamily: "inherit",
+                  resize: "vertical",
+                  backgroundColor: "var(--color-bg)",
+                }}
+              />
+              <Button type="submit" variant="secondary" disabled={loadingKimi || !kimiQuery.trim()}>
+                {loadingKimi ? "Asking…" : "Ask Kimi"}
+              </Button>
+            </form>
+            {kimiError && (
+              <p style={{ margin: "var(--space-2) 0 0 0", fontSize: "var(--text-sm)", color: "var(--color-error)" }}>{kimiError}</p>
+            )}
+            {kimiResponse && (
+              <div
+                style={{
+                  marginTop: "var(--space-3)",
+                  padding: "var(--space-4)",
+                  background: "var(--color-bg-muted)",
+                  borderRadius: "var(--radius-md)",
+                  border: "1px solid var(--color-border)",
+                  fontSize: "var(--text-sm)",
+                  lineHeight: 1.6,
+                  whiteSpace: "pre-wrap",
+                  color: "var(--color-text)",
+                }}
+              >
+                {kimiResponse}
+              </div>
+            )}
+          </div>
         </section>
       )}
 

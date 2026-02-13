@@ -17,12 +17,7 @@ import {
   useToast,
 } from "@/components/ui";
 import { createTask, updateTask, deleteTask, createTasksFromLines, type TaskStatus } from "./actions";
-import {
-  getGranolaMcpToolsAction,
-  listGranolaDocumentsAction,
-  importTasksFromGranolaDocument,
-  type GranolaDocument,
-} from "./granola-actions";
+import { FromGranolaTrigger } from "../from-granola-trigger";
 
 export type TaskRow = {
   id: string;
@@ -57,19 +52,6 @@ export function TasksClient({
   const [meetingOpen, setMeetingOpen] = useState(false);
   const [meetingPaste, setMeetingPaste] = useState("");
   const [meetingDue, setMeetingDue] = useState<"today" | "week">("week");
-  const [granolaOpen, setGranolaOpen] = useState(false);
-  const [granolaDocs, setGranolaDocs] = useState<GranolaDocument[]>([]);
-  const [granolaListError, setGranolaListError] = useState<string | null>(null);
-  const [granolaLoadingTools, setGranolaLoadingTools] = useState(false);
-  const [granolaLoadingList, setGranolaLoadingList] = useState(false);
-  const [granolaToolsError, setGranolaToolsError] = useState<string | null>(null);
-  const [granolaListTools, setGranolaListTools] = useState<string[]>([]);
-  const [granolaSelectedListTool, setGranolaSelectedListTool] = useState("");
-  const [granolaSearchQuery, setGranolaSearchQuery] = useState("");
-  const [granolaListFetched, setGranolaListFetched] = useState(false);
-  const [granolaListDebug, setGranolaListDebug] = useState<string | null>(null);
-  const [granolaSelectedId, setGranolaSelectedId] = useState("");
-  const [granolaDue, setGranolaDue] = useState<"today" | "week">("week");
   const [editOpen, setEditOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [editing, setEditing] = useState<TaskRow | null>(null);
@@ -248,60 +230,6 @@ export function TasksClient({
     }
   };
 
-  const handleOpenGranola = async () => {
-    setGranolaOpen(true);
-    setGranolaDocs([]);
-    setGranolaListError(null);
-    setGranolaSelectedId("");
-    setGranolaListFetched(false);
-    setGranolaToolsError(null);
-    setGranolaLoadingTools(true);
-    const toolsResult = await getGranolaMcpToolsAction();
-    setGranolaLoadingTools(false);
-    if (toolsResult.ok) {
-      setGranolaListTools(toolsResult.listTools);
-      setGranolaSelectedListTool(toolsResult.defaultListTool ?? toolsResult.listTools[0] ?? "");
-    } else {
-      setGranolaToolsError(toolsResult.error);
-      setGranolaListTools([]);
-      setGranolaSelectedListTool("");
-      addToast(toolsResult.error, "error");
-    }
-  };
-
-  const handleLoadGranolaMeetings = async () => {
-    if (!granolaSelectedListTool) return;
-    setGranolaListError(null);
-    setGranolaListDebug(null);
-    setGranolaLoadingList(true);
-    const result = await listGranolaDocumentsAction(granolaSelectedListTool, granolaSearchQuery || undefined);
-    setGranolaLoadingList(false);
-    setGranolaListFetched(true);
-    if (result.ok) {
-      setGranolaDocs(result.documents);
-      setGranolaListDebug(result.debug ?? null);
-    } else {
-      setGranolaListError(result.error);
-      addToast(result.error, "error");
-    }
-  };
-
-  const handleImportFromGranola = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!granolaSelectedId) return;
-    setSubmitting(true);
-    const result = await importTasksFromGranolaDocument(projectId, granolaSelectedId, granolaDue);
-    setSubmitting(false);
-    if (result.ok) {
-      setGranolaOpen(false);
-      setGranolaSelectedId("");
-      router.refresh();
-      addToast(`${result.count} task${result.count === 1 ? "" : "s"} imported from Granola.`, "success");
-    } else {
-      addToast(result.error, "error");
-    }
-  };
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "var(--space-2)" }}>
@@ -309,9 +237,7 @@ export function TasksClient({
           ← Overview
         </Link>
         <div style={{ display: "flex", gap: "var(--space-2)" }}>
-          <Button variant="secondary" onClick={handleOpenGranola}>
-            Import from Granola
-          </Button>
+          <FromGranolaTrigger projectId={projectId} />
           <Button variant="secondary" onClick={() => setMeetingOpen(true)}>
             Add from meeting
           </Button>
@@ -432,136 +358,6 @@ export function TasksClient({
         </div>
       )}
       </section>
-
-      <Dialog open={granolaOpen} onClose={() => !submitting && (setGranolaOpen(false), setGranolaSelectedId(""))} title="Import from Granola">
-        <p style={{ margin: "0 0 var(--space-3) 0", fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
-          Choose a transcript to import action items as tasks. Due date applies to all imported tasks.
-        </p>
-        {granolaLoadingTools ? (
-          <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>Connecting to Granola…</p>
-        ) : granolaToolsError ? (
-          <div
-            style={{
-              padding: "var(--space-3)",
-              background: "var(--color-error-subtle, rgba(185, 28, 28, 0.08))",
-              borderRadius: "var(--radius-md)",
-              border: "1px solid var(--color-error-border, rgba(185, 28, 28, 0.3))",
-            }}
-          >
-            <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-error, #b91c1c)", fontWeight: "var(--font-medium)" }}>
-              {granolaToolsError}
-            </p>
-            <p style={{ margin: "var(--space-2) 0 0 0", fontSize: "var(--text-xs)", color: "var(--color-text-muted)", lineHeight: 1.4 }}>
-              See Settings → Granola MCP for OAuth details. To use a bearer token, add GRANOLA_API_TOKEN to .env.local and restart.
-            </p>
-          </div>
-        ) : granolaListTools.length > 0 ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
-            <div>
-              <label style={{ fontSize: "var(--text-sm)", fontWeight: "var(--font-medium)", display: "block", marginBottom: "var(--space-2)" }}>List tool</label>
-              <select
-                value={granolaSelectedListTool}
-                onChange={(e) => { setGranolaSelectedListTool(e.target.value); setGranolaListError(null); setGranolaListDebug(null); setGranolaListFetched(false); }}
-                style={{
-                  width: "100%",
-                  padding: "var(--space-2) var(--space-3)",
-                  borderRadius: "var(--radius-md)",
-                  border: "1px solid var(--color-border)",
-                  fontSize: "var(--text-sm)",
-                  backgroundColor: "var(--color-bg)",
-                }}
-              >
-                {granolaListTools.map((name) => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label style={{ fontSize: "var(--text-sm)", fontWeight: "var(--font-medium)", display: "block", marginBottom: "var(--space-2)" }}>Search query (optional)</label>
-              <input
-                type="text"
-                value={granolaSearchQuery}
-                onChange={(e) => setGranolaSearchQuery(e.target.value)}
-                placeholder='For search_meetings: * or keyword. Ignored by other tools.'
-                style={{ width: "100%", padding: "var(--space-2) var(--space-3)", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", fontSize: "var(--text-sm)", backgroundColor: "var(--color-bg)" }}
-              />
-            </div>
-            <Button type="button" variant="secondary" onClick={handleLoadGranolaMeetings} disabled={granolaLoadingList || !granolaSelectedListTool}>
-              {granolaLoadingList ? "Loading…" : "Load meetings"}
-            </Button>
-            {granolaListError && (
-              <div style={{ padding: "var(--space-3)", background: "var(--color-error-subtle, rgba(185, 28, 28, 0.08))", borderRadius: "var(--radius-md)", border: "1px solid var(--color-error-border, rgba(185, 28, 28, 0.3))" }}>
-                <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-error, #b91c1c)", fontWeight: "var(--font-medium)" }}>{granolaListError}</p>
-              </div>
-            )}
-            {granolaListFetched && granolaDocs.length === 0 && !granolaListError && (
-              <>
-                <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>No meetings returned. Try another list tool above.</p>
-                {granolaListDebug && (
-                  <div style={{ padding: "var(--space-3)", background: "var(--color-surface-elevated)", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", fontSize: "var(--text-xs)", fontFamily: "monospace", whiteSpace: "pre-wrap", wordBreak: "break-all", color: "var(--color-text-muted)", maxHeight: 200, overflow: "auto" }}>
-                    <strong style={{ color: "var(--color-text)" }}>Debug (set GRANOLA_DEBUG=1)</strong>
-                    <pre style={{ margin: "var(--space-2) 0 0 0" }}>{granolaListDebug}</pre>
-                  </div>
-                )}
-              </>
-            )}
-            {granolaListFetched && granolaDocs.length > 0 && (
-          <form onSubmit={handleImportFromGranola} style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
-            <div>
-              <label style={{ fontSize: "var(--text-sm)", fontWeight: "var(--font-medium)", display: "block", marginBottom: "var(--space-2)" }}>Transcript</label>
-              <select
-                value={granolaSelectedId}
-                onChange={(e) => setGranolaSelectedId(e.target.value)}
-                required
-                style={{
-                  width: "100%",
-                  padding: "var(--space-2) var(--space-3)",
-                  borderRadius: "var(--radius-md)",
-                  border: "1px solid var(--color-border)",
-                  fontSize: "var(--text-sm)",
-                  backgroundColor: "var(--color-bg)",
-                }}
-              >
-                <option value="">Select one…</option>
-                {granolaDocs.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.title ?? d.id}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label style={{ fontSize: "var(--text-sm)", fontWeight: "var(--font-medium)", display: "block", marginBottom: "var(--space-2)" }}>Due</label>
-              <select
-                value={granolaDue}
-                onChange={(e) => setGranolaDue(e.target.value as "today" | "week")}
-                style={{
-                  padding: "var(--space-2) var(--space-3)",
-                  borderRadius: "var(--radius-md)",
-                  border: "1px solid var(--color-border)",
-                  fontSize: "var(--text-sm)",
-                  backgroundColor: "var(--color-bg)",
-                }}
-              >
-                <option value="today">Today</option>
-                <option value="week">End of week (Friday)</option>
-              </select>
-            </div>
-            <div style={{ display: "flex", gap: "var(--space-3)", justifyContent: "flex-end", marginTop: "var(--space-2)" }}>
-              <Button type="button" variant="secondary" onClick={() => setGranolaOpen(false)} disabled={submitting}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={submitting || !granolaSelectedId}>
-                {submitting ? "Importing…" : "Import tasks"}
-              </Button>
-            </div>
-          </form>
-            )}
-          </div>
-        ) : (
-          <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>No MCP tools available. Check Settings → Granola MCP.</p>
-        )}
-      </Dialog>
 
       <Dialog open={meetingOpen} onClose={() => !submitting && (setMeetingOpen(false), setMeetingPaste(""))} title="Add from meeting">
         <p style={{ margin: "0 0 var(--space-3) 0", fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
