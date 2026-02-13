@@ -287,7 +287,7 @@ export async function importFromGranolaIntoProject(
         : transcript.title;
 
       if (options.taskItems && options.taskItems.length > 0) {
-        const lines = options.taskItems.map((t) => ({ title: t.title.trim(), due_at, assignee_id: t.assignee_id || null, source_meeting_label: sourceLabel }));
+        const lines = options.taskItems.map((t) => ({ title: t.title.trim(), due_at, assignee_id: t.assignee_id || null, source_meeting_label: sourceLabel, source_meeting_id: documentId }));
         const result = await createTasksFromLines(projectId, lines.filter((l) => l.title.length > 0));
         if (!result.ok) return { ok: false, error: result.error };
         tasksCreated = result.count;
@@ -311,6 +311,7 @@ export async function importFromGranolaIntoProject(
               due_at,
               assignee_id: ownerStr ? matchOwnerToContact(ownerStr, list) : null,
               source_meeting_label: sourceLabel,
+              source_meeting_id: documentId,
             };
           });
           const result = await createTasksFromLines(projectId, lines);

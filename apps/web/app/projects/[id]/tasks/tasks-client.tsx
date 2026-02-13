@@ -35,6 +35,7 @@ export type TaskRow = {
   due_at: string | null;
   notes: string | null;
   source_meeting_label: string | null;
+  source_meeting_id: string | null;
 };
 
 export type ContactOption = { id: string; name: string };
@@ -67,8 +68,9 @@ export function TasksClient({
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [viewFilter, setViewFilter] = useState<"this_week" | "all">("this_week");
+  const [viewFilter, setViewFilter] = useState<"today" | "this_week" | "this_month" | "all">("this_week");
   const [viewMode, setViewMode] = useState<"list" | "board">("list");
+  const [boardCollapsed, setBoardCollapsed] = useState<Set<TaskStatus>>(new Set(["done", "cancelled"]));
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [boardDropTarget, setBoardDropTarget] = useState<TaskStatus | null>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
@@ -127,6 +129,7 @@ export function TasksClient({
           due_at: form.due_at || null,
           notes: form.notes.trim() || null,
           source_meeting_label: null,
+          source_meeting_id: null,
         },
       ]);
     } else {
@@ -199,15 +202,29 @@ export function TasksClient({
   const dayOfWeek = now.getDay();
   const daysUntilFriday = dayOfWeek <= 5 ? 5 - dayOfWeek : 5 + (7 - dayOfWeek);
   const endOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysUntilFriday, 23, 59, 59).toISOString();
+  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
 
-  const dailyTasks = tasks.filter(
+  const todayTasks = tasks.filter(
+    (t) =>
+      (t.status === "todo" || t.status === "in_progress") &&
+      t.due_at &&
+      t.due_at >= startOfToday &&
+      t.due_at <= endOfToday
+  );
+  const weekTasks = tasks.filter(
     (t) =>
       (t.status === "todo" || t.status === "in_progress") &&
       t.due_at &&
       t.due_at >= startOfToday &&
       t.due_at <= endOfWeek
   );
-  const otherTasks = tasks.filter((t) => !dailyTasks.includes(t));
+  const monthTasks = tasks.filter(
+    (t) =>
+      (t.status === "todo" || t.status === "in_progress") &&
+      t.due_at &&
+      t.due_at >= startOfToday &&
+      t.due_at <= endOfMonth
+  );
 
   const handleToggleDone = async (t: TaskRow) => {
     const nextStatus = t.status === "done" ? "todo" : "done";
@@ -222,7 +239,14 @@ export function TasksClient({
     }
   };
 
-  const displayedTasks = viewFilter === "this_week" ? dailyTasks : tasks;
+  const displayedTasks =
+    viewFilter === "today"
+      ? todayTasks
+      : viewFilter === "this_week"
+        ? weekTasks
+        : viewFilter === "this_month"
+          ? monthTasks
+          : tasks;
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -391,7 +415,7 @@ export function TasksClient({
               background: "var(--color-bg-muted)",
             }}
           >
-            {(["this_week", "all"] as const).map((view) => (
+            {(["today", "this_week", "this_month", "all"] as const).map((view) => (
               <button
                 key={view}
                 type="button"
@@ -410,7 +434,7 @@ export function TasksClient({
                   boxShadow: viewFilter === view ? "0 1px 2px rgba(0,0,0,0.05)" : "none",
                 }}
               >
-                {view === "this_week" ? "This week" : "All tasks"}
+                {view === "today" ? "Today" : view === "this_week" ? "This week" : view === "this_month" ? "This month" : "All"}
               </button>
             ))}
           </div>
@@ -475,31 +499,46 @@ export function TasksClient({
         />
       ) : displayedTasks.length === 0 ? (
         <p style={{ margin: 0, padding: "var(--space-6)", fontSize: "var(--text-sm)", color: "var(--color-text-muted)", textAlign: "center" }}>
-          {viewFilter === "this_week" ? "No tasks due this week. Switch to All tasks or add new ones." : "No tasks."}
+          {viewFilter === "today"
+            ? "No tasks due today. Try This week, This month, or All."
+            : viewFilter === "this_week"
+              ? "No tasks due this week. Try This month or All."
+              : viewFilter === "this_month"
+                ? "No tasks due this month. Try All."
+                : "No tasks."}
         </p>
       ) : viewMode === "board" ? (
         <div style={{ display: "flex", gap: "var(--space-4)", overflowX: "auto", paddingBottom: "var(--space-2)" }}>
           {(["todo", "in_progress", "done", "cancelled"] as const).map((status) => {
             const columnTasks = displayedTasks.filter((t) => t.status === status);
+            const isCollapsed = boardCollapsed.has(status);
             const isDropTarget = boardDropTarget === status;
+            const toggleCollapsed = () => {
+              setBoardCollapsed((prev) => {
+                const next = new Set(prev);
+                if (next.has(status)) next.delete(status);
+                else next.add(status);
+                return next;
+              });
+            };
             return (
               <div
                 key={status}
-                onDragOver={(e) => {
+                onDragOver={isCollapsed ? undefined : (e) => {
                   e.preventDefault();
                   e.dataTransfer.dropEffect = "move";
                   setBoardDropTarget(status);
                 }}
-                onDragLeave={() => setBoardDropTarget(null)}
-                onDrop={(e) => {
+                onDragLeave={isCollapsed ? undefined : () => setBoardDropTarget(null)}
+                onDrop={isCollapsed ? undefined : (e) => {
                   e.preventDefault();
                   setBoardDropTarget(null);
                   const taskId = e.dataTransfer.getData("taskId");
                   if (taskId) handleBoardDrop(taskId, status);
                 }}
                 style={{
-                  minWidth: 260,
-                  flex: "1 1 0",
+                  minWidth: isCollapsed ? 100 : 260,
+                  flex: isCollapsed ? "0 0 auto" : "1 1 0",
                   borderRadius: "var(--radius-lg)",
                   border: "1px solid var(--color-border)",
                   background: isDropTarget ? "var(--color-bg-muted)" : "var(--color-bg-elevated)",
@@ -523,6 +562,41 @@ export function TasksClient({
                 >
                   {STATUS_LABELS[status]} ({columnTasks.length})
                 </div>
+                {isCollapsed ? (
+                  <button
+                    type="button"
+                    onClick={toggleCollapsed}
+                    style={{
+                      padding: "var(--space-2)",
+                      fontSize: "var(--text-xs)",
+                      color: "var(--color-accent)",
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      textAlign: "left",
+                    }}
+                  >
+                    Expand
+                  </button>
+                ) : (
+                  <>
+                    {(status === "done" || status === "cancelled") && (
+                      <button
+                        type="button"
+                        onClick={toggleCollapsed}
+                        style={{
+                          alignSelf: "flex-start",
+                          padding: "var(--space-1) var(--space-2)",
+                          fontSize: "var(--text-xs)",
+                          color: "var(--color-text-muted)",
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Collapse
+                      </button>
+                    )}
                 {columnTasks.map((t) => (
                   <div
                     key={t.id}
@@ -567,9 +641,20 @@ export function TasksClient({
                         >
                           {t.title}
                         </div>
-                        {t.source_meeting_label && (
+                        {(t.source_meeting_label || t.source_meeting_id) && (
                           <div style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", marginTop: "var(--space-1)" }}>
-                            From: {t.source_meeting_label}
+                            From:{" "}
+                            {t.source_meeting_id ? (
+                              <Link
+                                href={`/projects/${projectId}/import/granola?meeting=${encodeURIComponent(t.source_meeting_id)}`}
+                                onClick={(e) => e.stopPropagation()}
+                                style={{ color: "var(--color-accent)", textDecoration: "none" }}
+                              >
+                                {t.source_meeting_label ?? "View meeting"}
+                              </Link>
+                            ) : (
+                              t.source_meeting_label
+                            )}
                           </div>
                         )}
                         <div style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", marginTop: "var(--space-1)" }}>
@@ -579,6 +664,8 @@ export function TasksClient({
                     </div>
                   </div>
                 ))}
+                  </>
+                )}
               </div>
             );
           })}
@@ -659,7 +746,20 @@ export function TasksClient({
                     </span>
                   </TableCell>
                   <TableCell style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>
-                    {t.source_meeting_label ?? "—"}
+                    {t.source_meeting_label || t.source_meeting_id ? (
+                      t.source_meeting_id ? (
+                        <Link
+                          href={`/projects/${projectId}/import/granola?meeting=${encodeURIComponent(t.source_meeting_id)}`}
+                          style={{ color: "var(--color-accent)", textDecoration: "none" }}
+                        >
+                          {t.source_meeting_label ?? "View meeting context"}
+                        </Link>
+                      ) : (
+                        t.source_meeting_label ?? "—"
+                      )
+                    ) : (
+                      "—"
+                    )}
                   </TableCell>
                   <TableCell>
                     <select
@@ -835,9 +935,19 @@ export function TasksClient({
 
       <Dialog open={editOpen} onClose={() => !submitting && (setEditOpen(false), setEditing(null))} title="Edit task">
         <form onSubmit={handleEdit} style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
-          {editing?.source_meeting_label && (
+          {(editing?.source_meeting_label || editing?.source_meeting_id) && (
             <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
-              From meeting: <strong style={{ color: "var(--color-text)" }}>{editing.source_meeting_label}</strong>
+              From meeting:{" "}
+              {editing?.source_meeting_id ? (
+                <Link
+                  href={`/projects/${projectId}/import/granola?meeting=${encodeURIComponent(editing.source_meeting_id)}`}
+                  style={{ color: "var(--color-accent)", fontWeight: "var(--font-medium)", textDecoration: "none" }}
+                >
+                  {editing.source_meeting_label ?? "View full context"}
+                </Link>
+              ) : (
+                <strong style={{ color: "var(--color-text)" }}>{editing?.source_meeting_label}</strong>
+              )}
             </p>
           )}
           <label style={{ fontSize: "var(--text-sm)", fontWeight: "var(--font-medium)" }}>Title *</label>

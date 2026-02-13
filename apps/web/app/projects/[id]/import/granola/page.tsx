@@ -15,10 +15,14 @@ export const dynamic = "force-dynamic";
 
 export default async function GranolaImportPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const { id } = await params;
+  const sp = await searchParams;
+  const meetingId = typeof sp?.meeting === "string" ? sp.meeting : undefined;
   if (!isValidProjectId(id)) notFound();
   const supabase = await createClient();
   const { data: project, error } = await supabase
@@ -36,7 +40,7 @@ export default async function GranolaImportPage({
         description="Load today's meetings (or expand the range), get AI summaries and action items, then import tasks and notes."
       />
       <div style={{ padding: "var(--space-8)", flex: 1, maxWidth: "52rem", margin: "0 auto", width: "100%" }}>
-        <GranolaImportClient projectId={id} projectName={project.name} />
+        <GranolaImportClient projectId={id} projectName={project.name} openMeetingId={meetingId} />
       </div>
     </AppShell>
   );

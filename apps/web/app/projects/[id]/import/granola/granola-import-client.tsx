@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button, useToast } from "@/components/ui";
@@ -21,12 +21,15 @@ import {
 export function GranolaImportClient({
   projectId,
   projectName,
+  openMeetingId,
 }: {
   projectId: string;
   projectName: string;
+  openMeetingId?: string;
 }) {
   const router = useRouter();
   const { addToast } = useToast();
+  const hasOpenedMeetingRef = useRef(false);
 
   const [connected, setConnected] = useState<boolean | null>(null);
   const [listTools, setListTools] = useState<string[]>([]);
@@ -191,6 +194,12 @@ export function GranolaImportClient({
       addToast(synResult.error, "error");
     }
   }
+
+  useEffect(() => {
+    if (!openMeetingId || !connected || hasOpenedMeetingRef.current) return;
+    hasOpenedMeetingRef.current = true;
+    handleSelectMeeting(openMeetingId);
+  }, [openMeetingId, connected]);
 
   async function handleSynthesize() {
     if (!transcript) return;

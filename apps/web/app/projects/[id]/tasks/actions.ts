@@ -13,7 +13,7 @@ export type VoidResult = { ok: true } | { ok: false; error: string };
 
 export async function createTask(
   projectId: string,
-  data: { title: string; status?: TaskStatus; assignee_id?: string | null; due_at?: string | null; notes?: string | null; source_meeting_label?: string | null }
+  data: { title: string; status?: TaskStatus; assignee_id?: string | null; due_at?: string | null; notes?: string | null; source_meeting_label?: string | null; source_meeting_id?: string | null }
 ): Promise<TaskResult> {
   if (!isValidProjectId(projectId)) return { ok: false, error: "Invalid project." };
   const user = await getCurrentUser();
@@ -30,6 +30,7 @@ export async function createTask(
       due_at: data.due_at || null,
       notes: data.notes?.trim() || null,
       source_meeting_label: data.source_meeting_label?.trim() || null,
+      source_meeting_id: data.source_meeting_id?.trim() || null,
     })
     .select("id")
     .single();
@@ -66,7 +67,7 @@ export type BulkCreateResult = { ok: true; count: number } | { ok: false; error:
 
 export async function createTasksFromLines(
   projectId: string,
-  lines: { title: string; due_at?: string | null; assignee_id?: string | null; source_meeting_label?: string | null }[]
+  lines: { title: string; due_at?: string | null; assignee_id?: string | null; source_meeting_label?: string | null; source_meeting_id?: string | null }[]
 ): Promise<BulkCreateResult> {
   if (!isValidProjectId(projectId)) return { ok: false, error: "Invalid project." };
   const user = await getCurrentUser();
@@ -84,6 +85,7 @@ export async function createTasksFromLines(
       due_at: line.due_at || null,
       notes: null,
       source_meeting_label: line.source_meeting_label?.trim() || null,
+      source_meeting_id: line.source_meeting_id?.trim() || null,
     });
     if (error) return { ok: false, error: error.message };
     count++;
