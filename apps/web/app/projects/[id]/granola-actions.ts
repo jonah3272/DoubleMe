@@ -7,7 +7,7 @@ import {
   parseActionItemsFromTranscript,
   parseActionItemsFromMarkdownSummary,
 } from "@/lib/granola-mcp";
-import { synthesizeTranscriptWithKimi } from "@/lib/kimi";
+import { synthesizeTranscriptWithKimi, extractMeetingsFromRawText } from "@/lib/kimi";
 import { createTasksFromLines } from "./tasks/actions";
 import { createArtifact } from "./artifacts/actions";
 import { isValidProjectId } from "@/lib/validators";
@@ -25,7 +25,7 @@ import { randomBytes } from "crypto";
 export type GranolaDocument = { id: string; title?: string; type?: string; created_at?: string; updated_at?: string };
 
 export type ListGranolaResult =
-  | { ok: true; documents: GranolaDocument[]; debug?: string; rawPreview?: string }
+  | { ok: true; documents: GranolaDocument[]; debug?: string; rawPreview?: string; extractedWithKimi?: boolean }
   | { ok: false; error: string };
 
 function base64UrlEncode(buf: Buffer): string {
@@ -103,11 +103,24 @@ export async function listGranolaDocumentsForProject(listTool?: string, searchQu
   if (!user) return { ok: false, error: "Not signed in." };
   try {
     const accessToken = await getGranolaAccessTokenForUser(user.id);
-    const { documents, debug, rawPreview } = await listGranolaDocuments(
+    const { documents, debug, rawPreview, rawFullText } = await listGranolaDocuments(
       accessToken ?? undefined,
       listTool ?? undefined,
       searchQuery ?? undefined
     );
+    if (documents.length === 0 && rawFullText) {
+      const extracted = await extractMeetingsFromRawText(rawFullText);
+      if (extracted.ok && extracted.meetings.length > 0) {
+        const mapped: GranolaDocument[] = extracted.meetings.map((m) => ({ id: m.id, title: m.title }));
+        return {
+          ok: true,
+          documents: mapped,
+          debug,
+          rawPreview,
+          extractedWithKimi: true,
+        };
+      }
+    }
     return { ok: true, documents, debug, rawPreview };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to list Granola documents.";

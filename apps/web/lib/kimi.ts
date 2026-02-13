@@ -72,3 +72,77 @@ export async function synthesizeTranscriptWithKimi(
     return { ok: false, error: message };
   }
 }
+
+const EXTRACT_MEETINGS_SYSTEM = `You extract meeting identifiers from raw API output. The output may be XML, JSON, or plain text.
+
+Return ONLY a JSON array of objects with exactly two keys: "id" and "title".
+- "id": the meeting's unique id (UUID or string id from the source).
+- "title": the meeting name/title.
+
+Example: [{"id": "b7792165-5399-4bdc-85a2-623995c56bef", "title": "Finest Known x Goji Handoff"}, ...]
+
+No markdown, no code fences, no explanation. Only the JSON array.`;
+
+export type ExtractedMeeting = { id: string; title: string };
+
+export type ExtractMeetingsResult =
+  | { ok: true; meetings: ExtractedMeeting[] }
+  | { ok: false; error: string };
+
+/** Use Kimi to extract meeting id and title from raw list response (XML, JSON, or text). */
+export async function extractMeetingsFromRawText(rawText: string): Promise<ExtractMeetingsResult> {
+  const apiKey = getKimiApiKeyOptional();
+  if (!apiKey) {
+    return { ok: false, error: "KIMI_API_KEY is not set. Add it to .env (or .env.local) to extract meetings." };
+  }
+
+  const truncated = rawText.slice(0, 50000);
+  const userContent = `Extract every meeting's id and title from this raw output:\n\n${truncated}`;
+
+  try {
+    const res = await fetch(`${KIMI_API_BASE}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        messages: [
+          { role: "system", content: EXTRACT_MEETINGS_SYSTEM },
+          { role: "user", content: userContent },
+        ],
+        temperature: 0.1,
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      return { ok: false, error: `Kimi API: ${res.status} ${err.slice(0, 200)}` };
+    }
+
+    const data = (await res.json()) as {
+      choices?: { message?: { content?: string } }[];
+      error?: { message?: string };
+    };
+    const content = data.choices?.[0]?.message?.content?.trim();
+    if (data.error?.message) return { ok: false, error: data.error.message };
+    if (!content) return { ok: false, error: "Empty response from Kimi." };
+
+    const jsonStr = content.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+    const parsed = JSON.parse(jsonStr) as unknown;
+    if (!Array.isArray(parsed)) return { ok: false, error: "Kimi did not return a JSON array." };
+    const meetings: ExtractedMeeting[] = [];
+    for (const item of parsed) {
+      if (item && typeof item === "object" && "id" in item && "title" in item) {
+        const id = String((item as { id: unknown }).id ?? "").trim();
+        const title = String((item as { title: unknown }).title ?? "").trim();
+        if (id) meetings.push({ id, title: title || id });
+      }
+    }
+    return { ok: true, meetings };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Kimi request failed.";
+    return { ok: false, error: message };
+  }
+}

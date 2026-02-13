@@ -178,7 +178,7 @@ export async function listGranolaMcpTools(accessToken?: string): Promise<{
   return { allTools, listTools, defaultListTool };
 }
 
-export type ListGranolaDocumentsResult = { documents: GranolaDocument[]; debug?: string; rawPreview?: string };
+export type ListGranolaDocumentsResult = { documents: GranolaDocument[]; debug?: string; rawPreview?: string; rawFullText?: string };
 
 /** List tools from Granola MCP and call the one that lists documents/transcripts. */
 export async function listGranolaDocuments(
@@ -261,7 +261,8 @@ export async function listGranolaDocuments(
   }
 
   const rawPreview = documents.length === 0 && text ? text.slice(0, 4000) : undefined;
-  return { documents, debug: alwaysDebugWhenEmpty, rawPreview };
+  const rawFullText = documents.length === 0 && text && text.length > 200 ? text : undefined;
+  return { documents, debug: alwaysDebugWhenEmpty, rawPreview, rawFullText };
 }
 
 /** Extract raw text from MCP tools/call result (content array or inline text). */
