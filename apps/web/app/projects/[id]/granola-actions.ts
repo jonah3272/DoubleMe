@@ -300,11 +300,15 @@ export async function importFromGranolaIntoProject(
             .order("name")
             .limit(100);
           const list = contacts ?? [];
-          const lines = items.map((item) => ({
-            title: "title" in item ? item.title : item,
-            due_at,
-            assignee_id: "owner" in item && item.owner ? matchOwnerToContact(item.owner, list) : null,
-          }));
+          const lines = items.map((item) => {
+            const title = "title" in item ? item.title : "";
+            const ownerStr = "owner" in item && typeof (item as { owner?: string }).owner === "string" ? (item as { owner: string }).owner : null;
+            return {
+              title,
+              due_at,
+              assignee_id: ownerStr ? matchOwnerToContact(ownerStr, list) : null,
+            };
+          });
           const result = await createTasksFromLines(projectId, lines);
           if (!result.ok) return { ok: false, error: result.error };
           tasksCreated = result.count;
