@@ -178,7 +178,7 @@ export async function listGranolaMcpTools(accessToken?: string): Promise<{
   return { allTools, listTools, defaultListTool };
 }
 
-export type ListGranolaDocumentsResult = { documents: GranolaDocument[]; debug?: string };
+export type ListGranolaDocumentsResult = { documents: GranolaDocument[]; debug?: string; rawPreview?: string };
 
 /** List tools from Granola MCP and call the one that lists documents/transcripts. */
 export async function listGranolaDocuments(
@@ -248,19 +248,20 @@ export async function listGranolaDocuments(
   const raw = parseListResponse(text);
   const documents = raw
     .map(normalizeGranolaDocument)
-    .filter((d) => d.id || d.title);
+    .filter((d) => d.id && String(d.id).trim() !== "");
 
   const alwaysDebugWhenEmpty =
     documents.length === 0
       ? process.env.GRANOLA_DEBUG
         ? `Tool: ${listTool}. Args: ${JSON.stringify(listArgs)}. Text length: ${text.length}. First 800 chars:\n${text.slice(0, 800)}`
-        : `Tool: ${listTool}. Response: ${text.length} chars. No parseable meetings. Add GRANOLA_DEBUG=1 to .env.local and restart to see raw MCP response.`
+        : `Tool: ${listTool}. Response: ${text.length} chars. No parseable meetings. See raw result below.`
       : undefined;
   if (documents.length === 0 && process.env.GRANOLA_DEBUG) {
     console.warn("[Granola MCP] list response (first 1200 chars):", text.slice(0, 1200));
   }
 
-  return { documents, debug: alwaysDebugWhenEmpty };
+  const rawPreview = documents.length === 0 && text ? text.slice(0, 4000) : undefined;
+  return { documents, debug: alwaysDebugWhenEmpty, rawPreview };
 }
 
 /** Extract raw text from MCP tools/call result (content array or inline text). */
@@ -280,7 +281,18 @@ function extractTextFromToolResult(result: unknown): string {
   // If result is an object that might be the list wrapper, stringify so parseListResponse can try it
   if (typeof result === "object" && result !== null) {
     const obj = result as Record<string, unknown>;
-    for (const key of ["meetings", "meeting_list", "meetingList", "documents", "results", "items", "data"]) {
+    for (const key of [
+      "meetings",
+      "meeting_list",
+      "meetingList",
+      "documents",
+      "results",
+      "items",
+      "data",
+      "content",
+      "notes",
+      "list",
+    ]) {
       if (Array.isArray(obj[key])) return JSON.stringify(result);
     }
   }
@@ -295,130 +307,198 @@ function extractJsonFromText(text: string): string {
   return trimmed;
 }
 
+/** Find the end index of the outermost JSON array or object starting at start. */
+function findMatchingBracket(s: string, start: number): number {
+  const open = s[start];
+  const close = open === "[" ? "]" : "}";
+  let depth = 1;
+  let i = start + 1;
+  while (i < s.length && depth > 0) {
+    const c = s[i];
+    if (c === "\\") {
+      i += 2;
+      continue;
+    }
+    if (c === '"') {
+      i++;
+      while (i < s.length && s[i] !== '"') {
+        if (s[i] === "\\") i++;
+        i++;
+      }
+      i++;
+      continue;
+    }
+    if (c === open) depth++;
+    else if (c === close) depth--;
+    i++;
+  }
+  return depth === 0 ? i - 1 : -1;
+}
+
 /** Parse tool response into array of item objects; handles many common response shapes. */
 function parseListResponse(text: string): Record<string, unknown>[] {
-  let toParse = extractJsonFromText(text);
+  const trimmed = text.trim();
+  let toParse = extractJsonFromText(trimmed);
   let parsed: unknown;
-  try {
-    parsed = JSON.parse(toParse);
-  } catch {
-    // Try to find JSON array or object in the text (preamble/formatting)
-    const arrayStart = text.indexOf("[");
-    const objectStart = text.indexOf("{");
-    if (arrayStart >= 0 && (objectStart < 0 || arrayStart < objectStart)) {
-      const end = text.lastIndexOf("]");
-      if (end > arrayStart) {
-        try {
-          parsed = JSON.parse(text.slice(arrayStart, end + 1));
-        } catch {
-          return [];
-        }
-      } else {
+
+  function tryParse(s: string): Record<string, unknown>[] | null {
+    try {
+      const p = JSON.parse(s);
+      if (Array.isArray(p)) {
+        if (p.length > 0 && typeof p[0] === "object" && p[0] !== null) return p as Record<string, unknown>[];
+        if (p.length > 0 && (typeof p[0] === "string" || typeof p[0] === "number"))
+          return p.map((id) => ({ id: String(id), title: undefined }));
         return [];
       }
-    } else if (objectStart >= 0) {
-      const end = text.lastIndexOf("}");
-      if (end > objectStart) {
-        try {
-          parsed = JSON.parse(text.slice(objectStart, end + 1));
-        } catch {
-          return [];
+      const obj = p as Record<string, unknown>;
+      const knownKeys = [
+        "documents",
+        "transcripts",
+        "meetings",
+        "meeting_list",
+        "meetingList",
+        "results",
+        "items",
+        "data",
+        "content",
+        "hits",
+        "list",
+        "notes",
+        "meeting_ids",
+        "meetingIds",
+      ];
+      for (const key of knownKeys) {
+        const val = obj[key];
+        if (Array.isArray(val) && val.length > 0 && typeof val[0] === "object" && val[0] !== null) {
+          return val as Record<string, unknown>[];
         }
-      } else {
-        return [];
       }
-    } else {
-      return [];
+      for (const value of Object.values(obj)) {
+        if (Array.isArray(value) && value.length > 0 && typeof value[0] === "object" && value[0] !== null) {
+          return value as Record<string, unknown>[];
+        }
+      }
+      for (const value of Object.values(obj)) {
+        if (value && typeof value === "object" && !Array.isArray(value)) {
+          const inner = tryParse(JSON.stringify(value));
+          if (inner && inner.length > 0) return inner;
+        }
+      }
+      return null;
+    } catch {
+      return null;
     }
-  }
-  if (Array.isArray(parsed)) {
-    const arr = parsed as unknown[];
-    if (arr.length > 0 && typeof arr[0] === "object" && arr[0] !== null) return arr as Record<string, unknown>[];
-    if (arr.length > 0 && (typeof arr[0] === "string" || typeof arr[0] === "number"))
-      return arr.map((id) => ({ id: String(id), title: undefined }));
   }
 
-  const obj = parsed as Record<string, unknown>;
-  const knownKeys = [
-    "documents",
-    "transcripts",
-    "meetings",
-    "meeting_list",
-    "meetingList",
-    "results",
-    "items",
-    "data",
-    "content",
-    "hits",
-    "list",
-    "meeting_ids",
-    "meetingIds",
-  ];
-  for (const key of knownKeys) {
-    const val = obj[key];
-    if (Array.isArray(val) && val.length > 0 && typeof val[0] === "object" && val[0] !== null) {
-      return val as Record<string, unknown>[];
+  const direct = tryParse(toParse);
+  if (direct && direct.length > 0) return direct;
+
+  // Find outermost [...] or {...} with bracket matching (handles nested JSON)
+  const arrayStart = trimmed.indexOf("[");
+  const objectStart = trimmed.indexOf("{");
+  if (arrayStart >= 0 && (objectStart < 0 || arrayStart < objectStart)) {
+    const end = findMatchingBracket(trimmed, arrayStart);
+    if (end > arrayStart) {
+      const slice = trimmed.slice(arrayStart, end + 1);
+      const arr = tryParse(slice);
+      if (arr && arr.length > 0) return arr;
     }
   }
-  // Any key whose value is an array of objects
-  for (const value of Object.values(obj)) {
-    if (Array.isArray(value) && value.length > 0 && typeof value[0] === "object" && value[0] !== null) {
-      return value as Record<string, unknown>[];
+  if (objectStart >= 0) {
+    const end = findMatchingBracket(trimmed, objectStart);
+    if (end > objectStart) {
+      const slice = trimmed.slice(objectStart, end + 1);
+      const arr = tryParse(slice);
+      if (arr && arr.length > 0) return arr;
     }
   }
-  // Nested: { data: { meetings: [...] } } or { response: { items: [...] } }
-  for (const value of Object.values(obj)) {
-    if (value && typeof value === "object" && !Array.isArray(value)) {
-      const inner = parseListResponse(JSON.stringify(value));
-      if (inner.length > 0) return inner;
+
+  // NDJSON: one JSON object per line
+  const lines = trimmed.split(/\n/);
+  const ndjson: Record<string, unknown>[] = [];
+  for (const line of lines) {
+    const t = line.trim();
+    if (!t || (t.startsWith("//") || t.startsWith("#"))) continue;
+    const parsedLine = tryParse(t);
+    if (parsedLine && parsedLine.length > 0) {
+      ndjson.push(...parsedLine);
     }
   }
+  if (ndjson.length > 0) return ndjson;
+
   return [];
 }
 
 function normalizeGranolaDocument(item: Record<string, unknown>): GranolaDocument {
-  const id = String(
-    item.id ??
-      item.meeting_id ??
-      item.document_id ??
-      item._id ??
-      item.uuid ??
-      (item as Record<string, unknown>).meetingId ??
-      (() => {
-        for (const [k, v] of Object.entries(item)) {
-          if ((k === "id" || k.endsWith("_id") || k.endsWith("Id")) && v != null && String(v).trim()) return String(v);
-        }
-        return "";
-      })()
-  );
-  const title = [
-    item.title,
-    item.name,
-    item.subject,
-    item.summary,
-    (item as Record<string, unknown>).meeting_title,
-    (item as Record<string, unknown>).meeting_title_override,
-  ].find((t) => t != null) as string | undefined;
-  const titleFallback =
-    title ??
-    (() => {
-      for (const [k, v] of Object.entries(item)) {
-        if ((k === "title" || k === "name" || k.includes("title") || k.includes("name")) && typeof v === "string" && v.trim()) return v;
+  const idKeys = [
+    "id",
+    "meeting_id",
+    "document_id",
+    "note_id",
+    "_id",
+    "uuid",
+    "meetingId",
+    "documentId",
+    "noteId",
+    "slug",
+    "permalink",
+  ];
+  let id = "";
+  for (const key of idKeys) {
+    const v = (item as Record<string, unknown>)[key];
+    if (v != null && String(v).trim()) {
+      id = String(v);
+      break;
+    }
+  }
+  if (!id) {
+    for (const [k, v] of Object.entries(item)) {
+      if ((k === "id" || k.endsWith("_id") || k.endsWith("Id") || k === "slug") && v != null && String(v).trim()) {
+        id = String(v);
+        break;
       }
-      return undefined;
-    })();
+    }
+  }
+  const titleKeys = [
+    "title",
+    "name",
+    "subject",
+    "summary",
+    "meeting_title",
+    "meeting_title_override",
+    "document_title",
+    "note_title",
+  ];
+  let title: string | undefined;
+  for (const key of titleKeys) {
+    const v = (item as Record<string, unknown>)[key];
+    if (v != null && typeof v === "string" && v.trim()) {
+      title = v.trim();
+      break;
+    }
+  }
+  if (!title) {
+    for (const [k, v] of Object.entries(item)) {
+      if ((k.includes("title") || k.includes("name")) && typeof v === "string" && v.trim()) {
+        title = v.trim();
+        break;
+      }
+    }
+  }
+  const dateKeys = ["created_at", "meeting_date", "date", "start_time", "start_at", "updated_at"];
+  let created_at: string | undefined;
+  for (const key of dateKeys) {
+    const v = (item as Record<string, unknown>)[key];
+    if (v != null) {
+      created_at = typeof v === "string" ? v : new Date(v as number).toISOString();
+      break;
+    }
+  }
   return {
     id,
-    title: title != null ? String(title) : titleFallback ?? undefined,
+    title,
     type: item.type != null ? String(item.type) : undefined,
-    created_at:
-      item.created_at != null
-        ? String(item.created_at)
-        : (item as Record<string, unknown>).meeting_date != null
-          ? String((item as Record<string, unknown>).meeting_date)
-          : (item as Record<string, unknown>).date != null
-            ? String((item as Record<string, unknown>).date)
-            : undefined,
+    created_at,
     updated_at: item.updated_at != null ? String(item.updated_at) : undefined,
   };
 }
@@ -448,10 +528,11 @@ export async function getGranolaTranscriptFull(documentId: string, accessToken?:
 
   if (!getTool) throw new Error("Granola MCP does not expose get transcript/document tool.");
 
-  // get_meeting_transcript may use meeting_id or id
-  const getArgs = getTool.name === "get_meeting_transcript"
-    ? { meeting_id: documentId }
-    : { id: documentId };
+  // get_meeting_transcript may use meeting_id or id depending on server
+  const getArgs =
+    getTool.name === "get_meeting_transcript"
+      ? { meeting_id: documentId, id: documentId }
+      : { id: documentId };
 
   const callRes = await postMessage(url, token, {
     jsonrpc: "2.0",
