@@ -512,7 +512,6 @@ export function GranolaImportClient({
           </div>
             );
           })()}
-        )}
       </section>
 
       {/* Step 2: View & synthesize */}
